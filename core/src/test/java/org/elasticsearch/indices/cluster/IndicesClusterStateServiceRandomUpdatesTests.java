@@ -423,7 +423,7 @@ public class IndicesClusterStateServiceRandomUpdatesTests extends AbstractIndice
                 null,
                 null,
                 primaryReplicaSyncer,
-                s -> {});
+                (s, r) -> {});
     }
 
     private class RecordingIndicesService extends MockIndicesService {

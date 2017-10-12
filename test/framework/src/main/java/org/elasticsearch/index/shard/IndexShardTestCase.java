@@ -28,6 +28,8 @@ import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.IOUtils;
 import org.elasticsearch.ExceptionsHelper;
 import org.elasticsearch.Version;
+import org.elasticsearch.action.Action;
+import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.admin.indices.flush.FlushRequest;
 import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.cluster.metadata.IndexMetaData;
@@ -199,7 +201,7 @@ public abstract class IndexShardTestCase extends ESTestCase {
      */
     protected IndexShard newShard(ShardId shardId, boolean primary, String nodeId, IndexMetaData indexMetaData,
                                   @Nullable IndexSearcherWrapper searcherWrapper) throws IOException {
-        return newShard(shardId, primary, nodeId, indexMetaData, searcherWrapper, () -> {});
+        return newShard(shardId, primary, nodeId, indexMetaData, searcherWrapper, r -> {});
     }
 
     /**
@@ -210,8 +212,9 @@ public abstract class IndexShardTestCase extends ESTestCase {
      * @param primary indicates whether to a primary shard (ready to recover from an empty store) or a replica
      *                (ready to recover from another shard)
      */
-    protected IndexShard newShard(ShardId shardId, boolean primary, String nodeId, IndexMetaData indexMetaData,
-                                  @Nullable IndexSearcherWrapper searcherWrapper, Runnable globalCheckpointSyncer) throws IOException {
+    protected IndexShard newShard(
+            ShardId shardId, boolean primary, String nodeId, IndexMetaData indexMetaData, @Nullable IndexSearcherWrapper searcherWrapper,
+            Consumer<Runnable> globalCheckpointSyncer) throws IOException {
         ShardRouting shardRouting = TestShardRouting.newShardRouting(shardId, nodeId, primary, ShardRoutingState.INITIALIZING,
             primary ? RecoverySource.StoreRecoverySource.EMPTY_STORE_INSTANCE : RecoverySource.PeerRecoverySource.INSTANCE);
         return newShard(shardRouting, indexMetaData, searcherWrapper, null, globalCheckpointSyncer);
@@ -228,7 +231,7 @@ public abstract class IndexShardTestCase extends ESTestCase {
      */
     protected IndexShard newShard(ShardRouting routing, IndexMetaData indexMetaData, IndexingOperationListener... listeners)
         throws IOException {
-        return newShard(routing, indexMetaData, null, null, () -> {}, listeners);
+        return newShard(routing, indexMetaData, null, null, r -> {}, listeners);
     }
 
     /**
@@ -243,7 +246,7 @@ public abstract class IndexShardTestCase extends ESTestCase {
     protected IndexShard newShard(ShardRouting routing, IndexMetaData indexMetaData,
                                   @Nullable IndexSearcherWrapper indexSearcherWrapper,
                                   @Nullable EngineFactory engineFactory,
-                                  Runnable globalCheckpointSyncer,
+                                  Consumer<Runnable> globalCheckpointSyncer,
                                   IndexingOperationListener... listeners)
         throws IOException {
         // add node id as name to settings for proper logging
@@ -266,7 +269,7 @@ public abstract class IndexShardTestCase extends ESTestCase {
     protected IndexShard newShard(ShardRouting routing, ShardPath shardPath, IndexMetaData indexMetaData,
                                   @Nullable IndexSearcherWrapper indexSearcherWrapper,
                                   @Nullable EngineFactory engineFactory,
-                                  Runnable globalCheckpointSyncer,
+                                  Consumer<Runnable> globalCheckpointSyncer,
                                   IndexingOperationListener... listeners) throws IOException {
         final Settings nodeSettings = Settings.builder().put("node.name", routing.currentNodeId()).build();
         final IndexSettings indexSettings = new IndexSettings(indexMetaData, nodeSettings);

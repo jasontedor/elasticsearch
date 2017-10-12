@@ -222,12 +222,13 @@ public abstract class AbstractIndicesClusterStateServiceTestCase extends ESTestC
         }
 
         @Override
-        public MockIndexShard createShard(ShardRouting shardRouting, RecoveryState recoveryState,
+        public MockIndexShard createShard(ShardRouting shardRouting,
+                                          RecoveryState recoveryState,
                                           PeerRecoveryTargetService recoveryTargetService,
                                           PeerRecoveryTargetService.RecoveryListener recoveryListener,
                                           RepositoriesService repositoriesService,
                                           Consumer<IndexShard.ShardFailure> onShardFailure,
-                                          Consumer<ShardId> globalCheckpointSyncer) throws IOException {
+                                          BiConsumer<ShardId, Runnable> globalCheckpointSyncer) throws IOException {
             failRandomly();
             MockIndexService indexService = indexService(recoveryState.getShardId().getIndex());
             MockIndexShard indexShard = indexService.createShard(shardRouting);

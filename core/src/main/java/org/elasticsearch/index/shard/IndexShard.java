@@ -147,6 +147,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -198,9 +199,9 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
     protected final EngineFactory engineFactory;
 
     private final IndexingOperationListener indexingOperationListeners;
-    private final Runnable globalCheckpointSyncer;
+    private final Consumer<Runnable> globalCheckpointSyncer;
 
-    Runnable getGlobalCheckpointSyncer() {
+    Consumer<Runnable> getGlobalCheckpointSyncer() {
         return globalCheckpointSyncer;
     }
 
@@ -256,7 +257,7 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
             Engine.Warmer warmer,
             List<SearchOperationListener> searchOperationListener,
             List<IndexingOperationListener> listeners,
-            Runnable globalCheckpointSyncer) throws IOException {
+            Consumer<Runnable> globalCheckpointSyncer) throws IOException {
         super(shardRouting.shardId(), indexSettings);
         assert shardRouting.initializing();
         this.shardRouting = shardRouting;
@@ -1775,6 +1776,10 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
         return getEngine().seqNoService().getInSyncGlobalCheckpoints();
     }
 
+    private final AtomicBoolean globalCheckpointSyncInProgress = new AtomicBoolean();
+
+    private final Runnable afterGlobalCheckpointSync = () -> globalCheckpointSyncInProgress.set(false);
+
     /**
      * Syncs the global checkpoint to the replicas if the global checkpoint on at least one replica is behind the global checkpoint on the
      * primary.
@@ -1797,9 +1802,9 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
                             .stream(globalCheckpoints.values().spliterator(), false)
                             .anyMatch(v -> v.value < globalCheckpoint);
             // only sync if there is a shard lagging the primary
-            if (syncNeeded) {
+            if (syncNeeded && globalCheckpointSyncInProgress.compareAndSet(false, true)) {
                 logger.trace("syncing global checkpoint for [{}]", reason);
-                globalCheckpointSyncer.run();
+                globalCheckpointSyncer.accept(afterGlobalCheckpointSync);
             }
         }
     }

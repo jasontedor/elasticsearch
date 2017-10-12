@@ -43,6 +43,9 @@ import org.elasticsearch.indices.IndicesService;
 import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.transport.TransportService;
 
+import java.util.Optional;
+import java.util.function.Consumer;
+
 /**
  * Background global checkpoint sync action initiated when a shard goes inactive. This is needed because while we send the global checkpoint
  * on every replication operation, after the last operation completes the global checkpoint could advance but without a follow-up operation
@@ -80,17 +83,34 @@ public class GlobalCheckpointSyncAction extends TransportReplicationAction<
                 ThreadPool.Names.MANAGEMENT);
     }
 
-    public void updateGlobalCheckpointForShard(final ShardId shardId) {
+    public void updateGlobalCheckpointForShard(final ShardId shardId, final Runnable afterSync) {
         final ThreadContext threadContext = threadPool.getThreadContext();
         try (ThreadContext.StoredContext ignore = threadContext.stashContext()) {
             threadContext.markAsSystemContext();
             execute(
                     new Request(shardId),
-                    ActionListener.wrap(r -> {
-                    }, e -> {
-                        if (ExceptionsHelper.unwrap(e, AlreadyClosedException.class, IndexShardClosedException.class) == null) {
-                            logger.info(new ParameterizedMessage("{} global checkpoint sync failed", shardId), e);
-                        }
+                    ActionListener.wrap(
+                            r -> {
+                                try {
+                                    afterSync.run();
+                                } catch (final Exception inner) {
+                                    logger.debug(
+                                            () -> new ParameterizedMessage(
+                                                    "{} listener callback failed after global checkpoint sync succeeded", shardId), inner);
+                                }
+                            },
+                            e -> {
+                                if (ExceptionsHelper.unwrap(e, AlreadyClosedException.class, IndexShardClosedException.class) == null) {
+                                    logger.info(new ParameterizedMessage("{} global checkpoint sync failed", shardId), e);
+                                }
+                                try {
+                                    afterSync.run();
+                                } catch (final Exception inner) {
+                                    inner.addSuppressed(e);
+                                    logger.debug(
+                                            () -> new ParameterizedMessage(
+                                                    "{} listener callback failed after global checkpoint sync failed", shardId), inner);
+                                }
                     }));
         }
     }

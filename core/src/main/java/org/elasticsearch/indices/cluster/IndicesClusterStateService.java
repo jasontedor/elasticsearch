@@ -83,6 +83,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
@@ -118,7 +119,7 @@ public class IndicesClusterStateService extends AbstractLifecycleComponent imple
     private final boolean sendRefreshMapping;
     private final List<IndexEventListener> buildInIndexListener;
     private final PrimaryReplicaSyncer primaryReplicaSyncer;
-    private final Consumer<ShardId> globalCheckpointSyncer;
+    private final BiConsumer<ShardId, Runnable> globalCheckpointSyncer;
 
     @Inject
     public IndicesClusterStateService(Settings settings,
@@ -155,7 +156,7 @@ public class IndicesClusterStateService extends AbstractLifecycleComponent imple
                                PeerRecoverySourceService peerRecoverySourceService,
                                SnapshotShardsService snapshotShardsService,
                                PrimaryReplicaSyncer primaryReplicaSyncer,
-                               Consumer<ShardId> globalCheckpointSyncer) {
+                               BiConsumer<ShardId, Runnable> globalCheckpointSyncer) {
         super(settings);
         this.buildInIndexListener =
                 Arrays.asList(
@@ -840,7 +841,7 @@ public class IndicesClusterStateService extends AbstractLifecycleComponent imple
         T createShard(ShardRouting shardRouting, RecoveryState recoveryState, PeerRecoveryTargetService recoveryTargetService,
                       PeerRecoveryTargetService.RecoveryListener recoveryListener, RepositoriesService repositoriesService,
                       Consumer<IndexShard.ShardFailure> onShardFailure,
-                      Consumer<ShardId> globalCheckpointSyncer) throws IOException;
+                      BiConsumer<ShardId, Runnable> globalCheckpointSyncer) throws IOException;
 
         /**
          * Returns shard for the specified id if it exists otherwise returns <code>null</code>.

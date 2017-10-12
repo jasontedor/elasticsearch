@@ -775,7 +775,7 @@ public class IndexShardTests extends IndexShardTestCase {
                 .build();
         final IndexMetaData.Builder indexMetadata = IndexMetaData.builder(shardRouting.getIndexName()).settings(settings).primaryTerm(0, 1);
         final AtomicBoolean synced = new AtomicBoolean();
-        final IndexShard primaryShard = newShard(shardRouting, indexMetadata.build(), null, null, () -> { synced.set(true); });
+        final IndexShard primaryShard = newShard(shardRouting, indexMetadata.build(), null, null, r -> { synced.set(true); });
         // add a replica
         recoverShardFromStore(primaryShard);
         final IndexShard replicaShard = newShard(shardId, false);
@@ -1784,7 +1784,7 @@ public class IndexShardTests extends IndexShardTestCase {
         closeShards(shard);
         IndexShard newShard = newShard(
             ShardRoutingHelper.initWithSameId(shard.routingEntry(), RecoverySource.StoreRecoverySource.EXISTING_STORE_INSTANCE),
-            shard.shardPath(), shard.indexSettings().getIndexMetaData(), wrapper, null, () -> {});
+            shard.shardPath(), shard.indexSettings().getIndexMetaData(), wrapper, null, r -> {});
 
         recoverShardFromStore(newShard);
 
@@ -1930,7 +1930,7 @@ public class IndexShardTests extends IndexShardTestCase {
         closeShards(shard);
         IndexShard newShard = newShard(
             ShardRoutingHelper.initWithSameId(shard.routingEntry(), RecoverySource.StoreRecoverySource.EXISTING_STORE_INSTANCE),
-            shard.shardPath(), shard.indexSettings().getIndexMetaData(), wrapper, null, () -> {});
+            shard.shardPath(), shard.indexSettings().getIndexMetaData(), wrapper, null, r -> {});
 
         recoverShardFromStore(newShard);
 
