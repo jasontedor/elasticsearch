@@ -189,10 +189,11 @@ public class TranslogDeletionPolicyTests extends ESTestCase {
             byte[] bytes = new byte[4];
             ByteArrayDataOutput out = new ByteArrayDataOutput(bytes);
 
+            final long primaryTerm = randomNonNegativeLong();
             for (int ops = randomIntBetween(0, 20); ops > 0; ops--) {
                 out.reset(bytes);
                 out.writeInt(ops);
-                writer.add(new BytesArray(bytes), ops);
+                writer.add(new BytesArray(bytes), ops, primaryTerm);
             }
         }
         return new Tuple<>(readers, writer);

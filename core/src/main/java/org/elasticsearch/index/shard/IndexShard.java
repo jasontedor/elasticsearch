@@ -58,7 +58,6 @@ import org.elasticsearch.common.lease.Releasables;
 import org.elasticsearch.common.lucene.Lucene;
 import org.elasticsearch.common.metrics.MeanMetric;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.common.unit.ByteSizeValue;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.util.BigArrays;
 import org.elasticsearch.common.util.concurrent.AbstractRunnable;
@@ -150,7 +149,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -477,6 +475,7 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
                                  * numbers. To ensure that this is not the case, we restore the state of the local checkpoint tracker by
                                  * replaying the translog and marking any operations there are completed.
                                  */
+                                getEngine().rollTranslogGeneration();
                                 getEngine().restoreLocalCheckpointFromTranslog();
                                 getEngine().fillSeqNoGaps(newPrimaryTerm);
                                 getEngine().seqNoService().updateLocalCheckpointForShard(currentRouting.allocationId().getId(),

@@ -502,7 +502,7 @@ public class Translog extends AbstractIndexShardComponent implements IndexShardC
             final ReleasablePagedBytesReference bytes = out.bytes();
             try (ReleasableLock ignored = readLock.acquire()) {
                 ensureOpen();
-                return current.add(bytes, operation.seqNo());
+                return current.add(bytes, operation.seqNo(), operation.primaryTerm());
             }
         } catch (final AlreadyClosedException | IOException ex) {
             try {

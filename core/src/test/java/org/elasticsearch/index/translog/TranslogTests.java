@@ -297,9 +297,8 @@ public class TranslogTests extends ESTestCase {
         }
 
         final long seqNo = randomNonNegativeLong();
-        final long primaryTerm = randomNonNegativeLong();
         final String reason = randomAlphaOfLength(16);
-        addToTranslogAndList(translog, ops, new Translog.NoOp(seqNo, primaryTerm, reason));
+        addToTranslogAndList(translog, ops, new Translog.NoOp(seqNo, 0, reason));
 
         try (Translog.Snapshot snapshot = translog.newSnapshot()) {
 
@@ -314,7 +313,7 @@ public class TranslogTests extends ESTestCase {
             Translog.NoOp noOp = (Translog.NoOp) snapshot.next();
             assertNotNull(noOp);
             assertThat(noOp.seqNo(), equalTo(seqNo));
-            assertThat(noOp.primaryTerm(), equalTo(primaryTerm));
+            assertThat(noOp.primaryTerm(), equalTo(0L));
             assertThat(noOp.reason(), equalTo(reason));
 
             assertNull(snapshot.next());
@@ -388,7 +387,7 @@ public class TranslogTests extends ESTestCase {
             assertThat(stats.getUncommittedSizeInBytes(), equalTo(195L));
         }
 
-        translog.add(new Translog.NoOp(3, 1, randomAlphaOfLength(16)));
+        translog.add(new Translog.NoOp(3, 0, randomAlphaOfLength(16)));
         {
             final TranslogStats stats = stats();
             assertThat(stats.estimatedNumberOfOperations(), equalTo(4));
@@ -798,7 +797,7 @@ public class TranslogTests extends ESTestCase {
                                 op = new Translog.Delete("test", Long.toString(id), id, newUid(Long.toString(id)));
                                 break;
                             case NO_OP:
-                                op = new Translog.NoOp(id, 1, Long.toString(id));
+                                op = new Translog.NoOp(id, 0, Long.toString(id));
                                 break;
                             default:
                                 throw new AssertionError("unsupported operation type [" + type + "]");
@@ -1090,6 +1089,7 @@ public class TranslogTests extends ESTestCase {
     }
 
     public void testTranslogWriter() throws IOException {
+        final long primaryTerm = randomNonNegativeLong();
         final TranslogWriter writer = translog.createWriter(translog.currentFileGeneration() + 1);
         final int numOps = randomIntBetween(8, 128);
         byte[] bytes = new byte[4];
@@ -1107,7 +1107,7 @@ public class TranslogTests extends ESTestCase {
             if (seqNo != SequenceNumbers.UNASSIGNED_SEQ_NO) {
                 seenSeqNos.add(seqNo);
             }
-            writer.add(new BytesArray(bytes), seqNo);
+            writer.add(new BytesArray(bytes), seqNo, primaryTerm);
         }
         writer.sync();
 
@@ -1126,7 +1126,7 @@ public class TranslogTests extends ESTestCase {
 
         out.reset(bytes);
         out.writeInt(2048);
-        writer.add(new BytesArray(bytes), randomNonNegativeLong());
+        writer.add(new BytesArray(bytes), randomNonNegativeLong(), primaryTerm);
 
         if (reader instanceof TranslogReader) {
             ByteBuffer buffer = ByteBuffer.allocate(4);
@@ -1150,6 +1150,7 @@ public class TranslogTests extends ESTestCase {
     }
 
     public void testCloseIntoReader() throws IOException {
+        final long primaryTerm = randomNonNegativeLong();
         try (TranslogWriter writer = translog.createWriter(translog.currentFileGeneration() + 1)) {
             final int numOps = randomIntBetween(8, 128);
             final byte[] bytes = new byte[4];
@@ -1157,7 +1158,7 @@ public class TranslogTests extends ESTestCase {
             for (int i = 0; i < numOps; i++) {
                 out.reset(bytes);
                 out.writeInt(i);
-                writer.add(new BytesArray(bytes), randomNonNegativeLong());
+                writer.add(new BytesArray(bytes), randomNonNegativeLong(), primaryTerm);
             }
             writer.sync();
             final Checkpoint writerCheckpoint = writer.getCheckpoint();
@@ -1548,7 +1549,7 @@ public class TranslogTests extends ESTestCase {
                                 randomFrom(VersionType.values()));
                             break;
                         case NO_OP:
-                            op = new Translog.NoOp(seqNoGenerator.getAndIncrement(), randomNonNegativeLong(), randomAlphaOfLength(16));
+                            op = new Translog.NoOp(seqNoGenerator.getAndIncrement(), 0, randomAlphaOfLength(16));
                             break;
                         default:
                             throw new AssertionError("unsupported operation type [" + type + "]");

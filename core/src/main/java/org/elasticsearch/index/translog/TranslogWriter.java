@@ -24,6 +24,7 @@ import org.apache.lucene.store.AlreadyClosedException;
 import org.apache.lucene.store.OutputStreamDataOutput;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.IOUtils;
+import org.apache.lucene.util.SetOnce;
 import org.elasticsearch.Assertions;
 import org.elasticsearch.common.bytes.BytesArray;
 import org.elasticsearch.common.bytes.BytesReference;
@@ -41,10 +42,13 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.LongSupplier;
+import java.util.stream.Collectors;
 
 public class TranslogWriter extends BaseTranslogReader implements Closeable {
 
@@ -77,6 +81,7 @@ public class TranslogWriter extends BaseTranslogReader implements Closeable {
     private final Object syncLock = new Object();
 
     private final Map<Long, Tuple<BytesReference, Exception>> seenSequenceNumbers;
+    private final SetOnce<Tuple<Long, StackTraceElement[]>> firstSeenPrimaryTermHolder;
 
     private TranslogWriter(
         final ChannelFactory channelFactory,
@@ -102,6 +107,7 @@ public class TranslogWriter extends BaseTranslogReader implements Closeable {
         this.maxSeqNo = initialCheckpoint.maxSeqNo;
         this.globalCheckpointSupplier = globalCheckpointSupplier;
         this.seenSequenceNumbers = Assertions.ENABLED ? new HashMap<>() : null;
+        this.firstSeenPrimaryTermHolder = Assertions.ENABLED ? new SetOnce<>() : null;
     }
 
     static int getHeaderLength(String translogUUID) {
@@ -177,7 +183,7 @@ public class TranslogWriter extends BaseTranslogReader implements Closeable {
      * @return the location the bytes were written to
      * @throws IOException if writing to the translog resulted in an I/O exception
      */
-    public synchronized Translog.Location add(final BytesReference data, final long seqNo) throws IOException {
+    public synchronized Translog.Location add(final BytesReference data, final long seqNo, final long primaryTerm) throws IOException {
         ensureOpen();
         final long offset = totalOffset;
         try {
@@ -205,6 +211,7 @@ public class TranslogWriter extends BaseTranslogReader implements Closeable {
         operationCounter++;
 
         assert assertNoSeqNumberConflict(seqNo, data);
+        assert assertSinglePrimaryTerm(primaryTerm);
 
         return new Translog.Location(generation, offset, data.length());
     }
@@ -224,6 +231,24 @@ public class TranslogWriter extends BaseTranslogReader implements Closeable {
         } else {
             seenSequenceNumbers.put(seqNo,
                 new Tuple<>(new BytesArray(data.toBytesRef(), true), new RuntimeException("stack capture previous op")));
+        }
+        return true;
+    }
+
+    private synchronized boolean assertSinglePrimaryTerm(final long primaryTerm) {
+        final Tuple<Long, StackTraceElement[]> firstSeenPrimaryTerm = firstSeenPrimaryTermHolder.get();
+        if (firstSeenPrimaryTerm == null) {
+            assert operationCounter == 1;
+            firstSeenPrimaryTermHolder.set(Tuple.tuple(primaryTerm, Thread.currentThread().getStackTrace()));
+        } else if (primaryTerm != firstSeenPrimaryTerm.v1()) {
+            final String message = String.format(
+                    Locale.ROOT,
+                    "primary term [%d] conflicts with the primary term [%d] for this generation [%d] from\n%s",
+                    primaryTerm,
+                    firstSeenPrimaryTerm.v1(),
+                    generation,
+                    Arrays.stream(firstSeenPrimaryTerm.v2()).skip(1).map(e -> "\tat " + e).collect(Collectors.joining("\n")));
+            assert false : message;
         }
         return true;
     }
