@@ -1107,14 +1107,14 @@ public class TranslogTests extends ESTestCase {
 
             for (int op = 0; op < translogOperations; op++) {
                 if (op <= lastSynced) {
-                    final Translog.Operation read = snapshot.next();
+                    final Translog.Operation read = snapshot.next().operation();
                     assertEquals(Integer.toString(op), read.getSource().source.utf8ToString());
                 } else {
-                    Translog.Operation next = snapshot.next();
+                    Translog.Operation next = snapshot.next().operation();
                     assertNull(next);
                 }
             }
-            Translog.Operation next = snapshot.next();
+            Translog.Operation next = snapshot.next().operation();
             assertNull(next);
         }
         assertEquals(translogOperations + 1, translog.totalOperations());
@@ -1140,7 +1140,7 @@ public class TranslogTests extends ESTestCase {
             if (seqNo != SequenceNumbers.UNASSIGNED_SEQ_NO) {
                 seenSeqNos.add(seqNo);
             }
-            writer.add(new BytesArray(bytes), seqNo);
+            writer.add(new BytesArray(bytes), seqNo, position -> {});
         }
         writer.sync();
 
@@ -1159,7 +1159,7 @@ public class TranslogTests extends ESTestCase {
 
         out.reset(bytes);
         out.writeInt(2048);
-        writer.add(new BytesArray(bytes), randomNonNegativeLong());
+        writer.add(new BytesArray(bytes), randomNonNegativeLong(), position -> {});
 
         if (reader instanceof TranslogReader) {
             ByteBuffer buffer = ByteBuffer.allocate(4);
@@ -1190,7 +1190,7 @@ public class TranslogTests extends ESTestCase {
             for (int i = 0; i < numOps; i++) {
                 out.reset(bytes);
                 out.writeInt(i);
-                writer.add(new BytesArray(bytes), randomNonNegativeLong());
+                writer.add(new BytesArray(bytes), randomNonNegativeLong(), position -> {});
             }
             writer.sync();
             final Checkpoint writerCheckpoint = writer.getCheckpoint();
@@ -2511,7 +2511,7 @@ public class TranslogTests extends ESTestCase {
                     try (TranslogReader reader = translog.openReader(translog.location().resolve(Translog.getFilename(g)), checkpoint)) {
                         TranslogSnapshot snapshot = reader.newSnapshot();
                         Translog.Operation operation;
-                        while ((operation = snapshot.next()) != null) {
+                        while ((operation = snapshot.next().operation()) != null) {
                             generationSeenSeqNos.add(Tuple.tuple(operation.seqNo(), operation.primaryTerm()));
                             opCount++;
                         }
@@ -2658,6 +2658,10 @@ public class TranslogTests extends ESTestCase {
         try (Translog.Snapshot snapshot = translog.newSnapshot()) {
             assertThat(snapshot, containsOperationsInAnyOrder(latestOperations.values()));
         }
+    }
+
+    public void testIndexedSnapshot() throws {
+
     }
 
     static class SortedSnapshot implements Translog.Snapshot {
