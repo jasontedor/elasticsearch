@@ -867,17 +867,22 @@ public abstract class StreamOutput extends OutputStream {
                     writeVInt(59);
                     ex.writeTo(this);
                     writeBoolean(((EsRejectedExecutionException) throwable).isExecutorShutdown());
+                    return;
                 } else {
                     writeVInt(18);
                     writeBoolean(((EsRejectedExecutionException) throwable).isExecutorShutdown());
                     writeCause = false;
                 }
             } else {
+                final ElasticsearchException ex;
                 if (throwable instanceof ElasticsearchException && ElasticsearchException.isRegistered(throwable.getClass(), version)) {
-                    writeElasticsearchException((ElasticsearchException) throwable);
+                    ex = (ElasticsearchException) throwable;
                 } else {
-                    writeElasticsearchException(new NotSerializableExceptionWrapper(throwable));
+                    ex = new NotSerializableExceptionWrapper(throwable);
                 }
+                writeVInt(0);
+                writeVInt(ElasticsearchException.getId(ex.getClass()));
+                ex.writeTo(this);
                 return;
             }
             if (writeMessage) {
@@ -888,12 +893,6 @@ public abstract class StreamOutput extends OutputStream {
             }
             ElasticsearchException.writeStackTraces(throwable, this);
         }
-    }
-
-    private void writeElasticsearchException(final ElasticsearchException e) throws IOException {
-        writeVInt(0);
-        writeVInt(ElasticsearchException.getId(e.getClass()));
-        e.writeTo(this);
     }
 
     /**
