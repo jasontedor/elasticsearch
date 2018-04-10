@@ -20,16 +20,23 @@
 package org.elasticsearch.bootstrap;
 
 import org.apache.lucene.util.Constants;
+import org.elasticsearch.common.io.PathUtils;
 import org.elasticsearch.core.internal.io.IOUtils;
 import org.elasticsearch.env.Environment;
 import org.elasticsearch.plugins.Platforms;
 import org.elasticsearch.plugins.PluginInfo;
 import org.elasticsearch.plugins.PluginsService;
 
+import java.io.BufferedInputStream;
+import java.io.BufferedReader;
 import java.io.Closeable;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -59,7 +66,7 @@ final class Spawner implements Closeable {
      * @param environment the node environment
      * @throws IOException if an I/O error occurs reading the plugins or spawning a native process
      */
-    void spawnNativePluginControllers(final Environment environment) throws IOException {
+    void spawnNativePluginControllers(final Environment environment) throws InterruptedException, IOException {
         if (!spawned.compareAndSet(false, true)) {
             throw new IllegalStateException("native controllers already spawned");
         }
@@ -68,7 +75,7 @@ final class Spawner implements Closeable {
     }
 
     /** Spawn controllers in plugins found within the given directory. */
-    private void spawnControllers(Path pluginsDir, String type, Path tmpDir) throws IOException {
+    private void spawnControllers(Path pluginsDir, String type, Path tmpDir) throws InterruptedException, IOException {
         if (!Files.exists(pluginsDir)) {
             throw new IllegalStateException(type + " directory [" + pluginsDir + "] not found");
         }
@@ -90,7 +97,18 @@ final class Spawner implements Closeable {
                     plugin.getFileName());
                 throw new IllegalArgumentException(message);
             }
-            final Process process = spawnNativePluginController(spawnPath, tmpDir);
+            final Process process = spawnNativePluginController(info.getName(), spawnPath, tmpDir);
+            final InputStream[] inputStreams = new InputStream[] { process.getInputStream(), process.getErrorStream() };
+            for (final InputStream is : inputStreams) {
+                try (InputStreamReader isr = new InputStreamReader(is);
+                        BufferedReader br = new BufferedReader(isr)) {
+                    String line;
+                    while ((line = br.readLine()) != null) {
+                        System.out.println(line);
+                    }
+                }
+            }
+
             processes.add(process);
         }
     }
@@ -100,10 +118,8 @@ final class Spawner implements Closeable {
      * connected to this JVM via its stdin, stdout, and stderr streams, but the references to these
      * streams are not available to code outside this package.
      */
-    private Process spawnNativePluginController(
-            final Path spawnPath,
-            final Path tmpPath) throws IOException {
-        final String command;
+    private Process spawnNativePluginController(final String pluginName, final Path spawnPath, final Path tmpPath) throws InterruptedException, IOException {
+        final String[] command;
         if (Constants.WINDOWS) {
             /*
              * We have to get the short path name or starting the process could fail due to max path limitations. The underlying issue here
@@ -114,15 +130,54 @@ final class Spawner implements Closeable {
              * http://hg.openjdk.java.net/jdk8/jdk8/jdk/file/687fd7c7986d/src/windows/native/java/lang/ProcessImpl_md.c#l319), this
              * limitation is in force. As such, we use the short name to avoid any such problems.
              */
-            command = Natives.getShortPathName(spawnPath.toString());
+            command = new String[] { Natives.getShortPathName(spawnPath.toString()) };
         } else {
-            command = spawnPath.toString();
+            Files.createDirectories(tmpPath.resolve("lib64"));
+            final int bindMountLib64 =
+                    JNACLibrary.mount("/lib64", tmpPath.resolve("lib64").toString(), null, JNACLibrary.MS_BIND, null);
+                    // new ProcessBuilder("mount", "--bind", "/lib64", tmpPath.resolve("lib64").toString()).start().waitFor();
+            if (bindMountLib64 != 0) {
+                final String message = String.format(
+                        Locale.ROOT,
+                        "failed with [%d] to bind mount /lib64 for controller [%s] for plugin [%s]",
+                        bindMountLib64,
+                        spawnPath,
+                        pluginName);
+                throw new IllegalStateException(message);
+            }
+            Files.createDirectories(tmpPath.resolve(pluginName).resolve("bin"));
+            final int bindMountControllerBin =
+                    JNACLibrary.mount(spawnPath.getParent().resolveSibling("bin").toString(), tmpPath.resolve(pluginName).resolve("bin").toString(), null, JNACLibrary.MS_BIND, null);
+            if (bindMountControllerBin != 0) {
+                final String message = String.format(
+                        Locale.ROOT,
+                        "failed with [%d] to bind mount bin for controller [%s] for plugin [%s]",
+                        bindMountControllerBin,
+                        spawnPath,
+                        pluginName);
+                throw new IllegalStateException(message);
+            }
+            Files.createDirectories(tmpPath.resolve(pluginName).resolve("lib"));
+            final int bindMountControllerLib =
+                    JNACLibrary.mount(spawnPath.getParent().resolveSibling("lib").toString(), tmpPath.resolve(pluginName).resolve("lib").toString(), null, JNACLibrary.MS_BIND, null);
+            if (bindMountControllerLib != 0) {
+                final String message = String.format(
+                        Locale.ROOT,
+                        "failed with [%d] to bind mount lib for controller [%s] for plugin [%s]",
+                        bindMountControllerLib,
+                        spawnPath,
+                        pluginName);
+                throw new IllegalStateException(message);
+            }
+            command = new String[] { "chroot", tmpPath.toString(), "cd /" + PathUtils.get(pluginName).resolve("bin").toString() };// + " && " + PathUtils.get(pluginName).resolve("bin").resolve(spawnPath.getFileName()).getFileName().toString() };
         }
+
         final ProcessBuilder pb = new ProcessBuilder(command);
 
         // the only environment variable passes on the path to the temporary directory
         pb.environment().clear();
-        pb.environment().put("TMPDIR", tmpPath.toString());
+        pb.environment().put("LD_LIBRARY_PATH", PathUtils.get(pluginName).resolveSibling("lib").toString());
+        pb.environment().put("TMPDIR", "/");
 
         // the output stream of the process object corresponds to the daemon's stdin
         return pb.start();

@@ -21,6 +21,7 @@ package org.elasticsearch.bootstrap;
 
 import com.sun.jna.Native;
 import com.sun.jna.NativeLong;
+import com.sun.jna.Pointer;
 import com.sun.jna.Structure;
 import org.apache.logging.log4j.Logger;
 import org.apache.lucene.util.Constants;
@@ -70,6 +71,10 @@ final class JNACLibrary {
     static native int setrlimit(int resource, Rlimit rlimit);
 
     static native String strerror(int errno);
+
+    public static final long MS_BIND = 4096;
+
+    static native int mount(String source, String target, String filesystemtype, long mountflags, Pointer data);
 
     private JNACLibrary() {
     }
