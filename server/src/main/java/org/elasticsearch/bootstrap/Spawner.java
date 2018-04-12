@@ -27,16 +27,13 @@ import org.elasticsearch.plugins.Platforms;
 import org.elasticsearch.plugins.PluginInfo;
 import org.elasticsearch.plugins.PluginsService;
 
-import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -98,16 +95,16 @@ final class Spawner implements Closeable {
                 throw new IllegalArgumentException(message);
             }
             final Process process = spawnNativePluginController(info.getName(), spawnPath, tmpDir);
-            final InputStream[] inputStreams = new InputStream[] { process.getInputStream(), process.getErrorStream() };
-            for (final InputStream is : inputStreams) {
-                try (InputStreamReader isr = new InputStreamReader(is);
-                        BufferedReader br = new BufferedReader(isr)) {
-                    String line;
-                    while ((line = br.readLine()) != null) {
-                        System.out.println(line);
-                    }
-                }
-            }
+//            final InputStream[] inputStreams = new InputStream[] { process.getInputStream(), process.getErrorStream() };
+//            for (final InputStream is : inputStreams) {
+//                try (InputStreamReader isr = new InputStreamReader(is);
+//                        BufferedReader br = new BufferedReader(isr)) {
+//                    String line;
+//                    while ((line = br.readLine()) != null) {
+//                        System.out.println(line);
+//                    }
+//                }
+//            }
 
             processes.add(process);
         }
@@ -118,7 +115,8 @@ final class Spawner implements Closeable {
      * connected to this JVM via its stdin, stdout, and stderr streams, but the references to these
      * streams are not available to code outside this package.
      */
-    private Process spawnNativePluginController(final String pluginName, final Path spawnPath, final Path tmpPath) throws InterruptedException, IOException {
+    private Process spawnNativePluginController(
+            final String pluginName, final Path spawnPath, final Path tmpPath) throws InterruptedException, IOException {
         final String[] command;
         if (Constants.WINDOWS) {
             /*
@@ -132,55 +130,62 @@ final class Spawner implements Closeable {
              */
             command = new String[] { Natives.getShortPathName(spawnPath.toString()) };
         } else {
-            Files.createDirectories(tmpPath.resolve("lib64"));
-            final int bindMountLib64 =
-                    JNACLibrary.mount("/lib64", tmpPath.resolve("lib64").toString(), null, JNACLibrary.MS_BIND, null);
-                    // new ProcessBuilder("mount", "--bind", "/lib64", tmpPath.resolve("lib64").toString()).start().waitFor();
-            if (bindMountLib64 != 0) {
-                final String message = String.format(
-                        Locale.ROOT,
-                        "failed with [%d] to bind mount /lib64 for controller [%s] for plugin [%s]",
-                        bindMountLib64,
-                        spawnPath,
-                        pluginName);
-                throw new IllegalStateException(message);
+            if (Constants.LINUX) {
+                readOnlyBindMount(PathUtils.get("/lib64"), tmpPath.resolve(pluginName).resolve("lib64"), pluginName, spawnPath);
+                readOnlyBindMount(spawnPath.getParent().resolveSibling("bin"), tmpPath.resolve(pluginName).resolve("bin"), pluginName, spawnPath);
+                readOnlyBindMount(spawnPath.getParent().resolveSibling("lib"), tmpPath.resolve(pluginName).resolve("lib"), pluginName, spawnPath);
+                command = new String[]{"chroot", tmpPath.resolve(pluginName).toString(), PathUtils.get("/bin").resolve(spawnPath.getFileName()).toString()};
+            } else {
+                command = new String[]{spawnPath.toString()};
             }
-            Files.createDirectories(tmpPath.resolve(pluginName).resolve("bin"));
-            final int bindMountControllerBin =
-                    JNACLibrary.mount(spawnPath.getParent().resolveSibling("bin").toString(), tmpPath.resolve(pluginName).resolve("bin").toString(), null, JNACLibrary.MS_BIND, null);
-            if (bindMountControllerBin != 0) {
-                final String message = String.format(
-                        Locale.ROOT,
-                        "failed with [%d] to bind mount bin for controller [%s] for plugin [%s]",
-                        bindMountControllerBin,
-                        spawnPath,
-                        pluginName);
-                throw new IllegalStateException(message);
-            }
-            Files.createDirectories(tmpPath.resolve(pluginName).resolve("lib"));
-            final int bindMountControllerLib =
-                    JNACLibrary.mount(spawnPath.getParent().resolveSibling("lib").toString(), tmpPath.resolve(pluginName).resolve("lib").toString(), null, JNACLibrary.MS_BIND, null);
-            if (bindMountControllerLib != 0) {
-                final String message = String.format(
-                        Locale.ROOT,
-                        "failed with [%d] to bind mount lib for controller [%s] for plugin [%s]",
-                        bindMountControllerLib,
-                        spawnPath,
-                        pluginName);
-                throw new IllegalStateException(message);
-            }
-            command = new String[] { "chroot", tmpPath.toString(), "cd /" + PathUtils.get(pluginName).resolve("bin").toString() };// + " && " + PathUtils.get(pluginName).resolve("bin").resolve(spawnPath.getFileName()).getFileName().toString() };
         }
 
         final ProcessBuilder pb = new ProcessBuilder(command);
 
         // the only environment variable passes on the path to the temporary directory
         pb.environment().clear();
-        pb.environment().put("LD_LIBRARY_PATH", PathUtils.get(pluginName).resolveSibling("lib").toString());
-        pb.environment().put("TMPDIR", "/");
+        if (Constants.LINUX) {
+            pb.environment().put("LD_LIBRARY_PATH", PathUtils.get(pluginName).resolveSibling("lib").toString());
+            pb.environment().put("TMPDIR", "/");
+        } else {
+            pb.environment().put("TMPDIR", tmpPath.toString());
+        }
 
         // the output stream of the process object corresponds to the daemon's stdin
         return pb.start();
+    }
+
+    private void readOnlyBindMount(
+            final Path source, final Path target, final String pluginName, final Path spawnPath) throws IOException {
+        System.out.println("creating directory: " + target);
+        Files.createDirectories(target);
+        System.out.println("bind mounting directory: " + source + " " + " to " + target);
+        final int mount = JNACLibrary.mount(source.toString(), target.toString(), null, JNACLibrary.MS_RDONLY | JNACLibrary.MS_BIND, null);
+        if (mount != 0) {
+            final String message = String.format(
+                    Locale.ROOT,
+                    "failed with [%d] to bind mount [%s] to [%s] for controller [%s] for plugin [%s]",
+                    mount,
+                    source,
+                    target,
+                    spawnPath,
+                    pluginName);
+            throw new IllegalStateException(message);
+        }
+        System.out.println("adding runtime shutdown hook");
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            final int umount = JNACLibrary.umount(target.toString());
+            if (umount != 0) {
+                final String message = String.format(
+                        Locale.ROOT,
+                        "failed with [%d] to umount [%s] for controller [%s] for plugin [%s]",
+                        umount,
+                        target,
+                        spawnPath,
+                        pluginName);
+                throw new IllegalStateException(message);
+            }
+        }));
     }
 
     /**

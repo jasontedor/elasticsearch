@@ -72,9 +72,12 @@ final class JNACLibrary {
 
     static native String strerror(int errno);
 
+    public static final long MS_RDONLY = 1;
     public static final long MS_BIND = 4096;
 
     static native int mount(String source, String target, String filesystemtype, long mountflags, Pointer data);
+
+    static native int umount(String target);
 
     private JNACLibrary() {
     }
