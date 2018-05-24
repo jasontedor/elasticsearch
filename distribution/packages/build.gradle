@@ -114,6 +114,11 @@ Closure commonPackageConfig(String type, boolean oss) {
       postTrans file("${scripts}/posttrans")
     }
 
+    fileMode 0644
+    dirMode 0755
+    user 'root'
+    permissionGroup 'root'
+
     // top level "into" directive is not inherited from ospackage for some reason, so we must
     // specify it again explicitly for copying common files
     into('/usr/share/elasticsearch') {
@@ -122,7 +127,6 @@ Closure commonPackageConfig(String type, boolean oss) {
       }
       from(rootProject.projectDir) {
         include 'README.textile'
-        fileMode 0644
       }
       into('modules') {
         with copySpec {
@@ -135,11 +139,6 @@ Closure commonPackageConfig(String type, boolean oss) {
             String[] segments = fcp.relativePath.segments
             for (int i = segments.length - 2; i > 0 && segments[i] != 'modules'; --i) {
               directory('/' + segments[0..i].join('/'), 0755)
-            }
-            if (segments[-2] == 'bin') {
-              fcp.mode = 0755
-            } else {
-              fcp.mode = 0644
             }
           }
         }
@@ -159,7 +158,6 @@ Closure commonPackageConfig(String type, boolean oss) {
           include oss ? 'APACHE-LICENSE-2.0.txt' : 'ELASTIC-LICENSE.txt'
           rename { 'LICENSE.txt' }
         }
-        fileMode 0644
       }
     }
 
@@ -187,17 +185,14 @@ Closure commonPackageConfig(String type, boolean oss) {
     // ========= systemd =========
     into('/usr/lib/tmpfiles.d') {
       from "${packagingFiles}/systemd/elasticsearch.conf"
-      fileMode 0644
     }
     into('/usr/lib/systemd/system') {
       fileType CONFIG | NOREPLACE
       from "${packagingFiles}/systemd/elasticsearch.service"
-      fileMode 0644
     }
     into('/usr/lib/sysctl.d') {
       fileType CONFIG | NOREPLACE
       from "${packagingFiles}/systemd/sysctl/elasticsearch.conf"
-      fileMode 0644
     }
 
     // ========= sysV init =========
@@ -256,11 +251,6 @@ ospackage {
   }
 
   requires('coreutils')
-
-  fileMode 0644
-  dirMode 0755
-  user 'root'
-  permissionGroup 'root'
 
   into '/usr/share/elasticsearch'
   with libFiles
