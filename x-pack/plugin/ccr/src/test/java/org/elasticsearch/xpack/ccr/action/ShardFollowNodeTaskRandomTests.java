@@ -51,16 +51,16 @@ public class ShardFollowNodeTaskRandomTests extends ESTestCase {
         task.start(testRun.startSeqNo - 1, testRun.startSeqNo - 1);
         assertBusy(() -> {
             ShardFollowNodeTask.Status status = task.getStatus();
-            assertThat(status.getLeaderGlobalCheckpoint(), equalTo(testRun.finalExpectedGlobalCheckpoint));
-            assertThat(status.getFollowerGlobalCheckpoint(), equalTo(testRun.finalExpectedGlobalCheckpoint));
-            assertThat(status.getIndexMetadataVersion(), equalTo(testRun.finalIndexMetaDataVerion));
+            assertThat(status.leaderGlobalCheckpoint(), equalTo(testRun.finalExpectedGlobalCheckpoint));
+            assertThat(status.followerGlobalCheckpoint(), equalTo(testRun.finalExpectedGlobalCheckpoint));
+            assertThat(status.indexMetadataVersion(), equalTo(testRun.finalIndexMetaDataVerion));
         });
 
         task.markAsCompleted();
         assertBusy(() -> {
             ShardFollowNodeTask.Status status = task.getStatus();
-            assertThat(status.getNumberOfConcurrentReads(), equalTo(0));
-            assertThat(status.getNumberOfConcurrentWrites(), equalTo(0));
+            assertThat(status.numberOfConcurrentReads(), equalTo(0));
+            assertThat(status.numberOfConcurrentWrites(), equalTo(0));
         });
     }
 

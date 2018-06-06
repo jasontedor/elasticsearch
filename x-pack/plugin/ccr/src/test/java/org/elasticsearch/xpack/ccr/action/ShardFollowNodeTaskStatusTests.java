@@ -3,6 +3,7 @@
  * or more contributor license agreements. Licensed under the Elastic License;
  * you may not use this file except in compliance with the Elastic License.
  */
+
 package org.elasticsearch.xpack.ccr.action;
 
 import org.elasticsearch.common.io.stream.Writeable;
@@ -28,4 +29,5 @@ public class ShardFollowNodeTaskStatusTests extends AbstractSerializingTestCase<
     protected Writeable.Reader<ShardFollowNodeTask.Status> instanceReader() {
         return ShardFollowNodeTask.Status::new;
     }
+
 }

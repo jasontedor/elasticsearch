@@ -55,8 +55,8 @@ public class ShardFollowNodeTaskTests extends ESTestCase {
         ));
 
         ShardFollowNodeTask.Status status = task.getStatus();
-        assertThat(status.getNumberOfConcurrentReads(), equalTo(8));
-        assertThat(status.getLastRequestedSeqno(), equalTo(63L));
+        assertThat(status.numberOfConcurrentReads(), equalTo(8));
+        assertThat(status.lastRequestedSeqNo(), equalTo(63L));
     }
 
     public void testWriteBuffer() {
@@ -75,10 +75,10 @@ public class ShardFollowNodeTaskTests extends ESTestCase {
         assertThat(shardChangesRequests.size(), equalTo(0)); // no more reads, because write buffer is full
 
         ShardFollowNodeTask.Status status = task.getStatus();
-        assertThat(status.getNumberOfConcurrentReads(), equalTo(0));
-        assertThat(status.getNumberOfConcurrentWrites(), equalTo(0));
-        assertThat(status.getLastRequestedSeqno(), equalTo(63L));
-        assertThat(status.getLeaderGlobalCheckpoint(), equalTo(128L));
+        assertThat(status.numberOfConcurrentReads(), equalTo(0));
+        assertThat(status.numberOfConcurrentWrites(), equalTo(0));
+        assertThat(status.lastRequestedSeqNo(), equalTo(63L));
+        assertThat(status.leaderGlobalCheckpoint(), equalTo(128L));
     }
 
     public void testMaxConcurrentReads() {
@@ -91,8 +91,8 @@ public class ShardFollowNodeTaskTests extends ESTestCase {
         assertThat(shardChangesRequests.get(0)[1], equalTo(8L));
 
         ShardFollowNodeTask.Status status = task.getStatus();
-        assertThat(status.getNumberOfConcurrentReads(), equalTo(1));
-        assertThat(status.getLastRequestedSeqno(), equalTo(7L));
+        assertThat(status.numberOfConcurrentReads(), equalTo(1));
+        assertThat(status.lastRequestedSeqNo(), equalTo(7L));
     }
 
     public void testTaskCancelled() {
@@ -106,7 +106,7 @@ public class ShardFollowNodeTaskTests extends ESTestCase {
 
         shardChangesRequests.clear();
         // The call the updateMapping is a noop, so noting happens.
-        task.start(128L, task.getStatus().getFollowerGlobalCheckpoint());
+        task.start(128L, task.getStatus().followerGlobalCheckpoint());
         task.markAsCompleted();
         task.coordinateReads();
         assertThat(shardChangesRequests.size(), equalTo(0));
@@ -129,11 +129,11 @@ public class ShardFollowNodeTaskTests extends ESTestCase {
         assertThat(bulkShardOperationRequests.size(), equalTo(0)); // no more writes, because task has been cancelled
 
         ShardFollowNodeTask.Status status = task.getStatus();
-        assertThat(status.getNumberOfConcurrentReads(), equalTo(0));
-        assertThat(status.getNumberOfConcurrentWrites(), equalTo(0));
-        assertThat(status.getLastRequestedSeqno(), equalTo(15L));
-        assertThat(status.getLeaderGlobalCheckpoint(), equalTo(31L));
-        assertThat(status.getFollowerGlobalCheckpoint(), equalTo(-1L));
+        assertThat(status.numberOfConcurrentReads(), equalTo(0));
+        assertThat(status.numberOfConcurrentWrites(), equalTo(0));
+        assertThat(status.lastRequestedSeqNo(), equalTo(15L));
+        assertThat(status.leaderGlobalCheckpoint(), equalTo(31L));
+        assertThat(status.followerGlobalCheckpoint(), equalTo(-1L));
     }
 
     public void testTaskCancelledAfterWriteBufferLimitHasBeenReached() {
@@ -153,11 +153,11 @@ public class ShardFollowNodeTaskTests extends ESTestCase {
         assertThat(bulkShardOperationRequests.size(), equalTo(0)); // no more writes, because task has been cancelled
 
         ShardFollowNodeTask.Status status = task.getStatus();
-        assertThat(status.getNumberOfConcurrentReads(), equalTo(0));
-        assertThat(status.getNumberOfConcurrentWrites(), equalTo(0));
-        assertThat(status.getLastRequestedSeqno(), equalTo(63L));
-        assertThat(status.getLeaderGlobalCheckpoint(), equalTo(128L));
-        assertThat(status.getFollowerGlobalCheckpoint(), equalTo(-1L));
+        assertThat(status.numberOfConcurrentReads(), equalTo(0));
+        assertThat(status.numberOfConcurrentWrites(), equalTo(0));
+        assertThat(status.lastRequestedSeqNo(), equalTo(63L));
+        assertThat(status.leaderGlobalCheckpoint(), equalTo(128L));
+        assertThat(status.followerGlobalCheckpoint(), equalTo(-1L));
     }
 
     public void testReceiveRetryableError() {
@@ -179,10 +179,10 @@ public class ShardFollowNodeTaskTests extends ESTestCase {
 
         assertThat(task.isStopped(), equalTo(false));
         ShardFollowNodeTask.Status status = task.getStatus();
-        assertThat(status.getNumberOfConcurrentReads(), equalTo(1));
-        assertThat(status.getNumberOfConcurrentWrites(), equalTo(0));
-        assertThat(status.getLastRequestedSeqno(), equalTo(63L));
-        assertThat(status.getLeaderGlobalCheckpoint(), equalTo(63L));
+        assertThat(status.numberOfConcurrentReads(), equalTo(1));
+        assertThat(status.numberOfConcurrentWrites(), equalTo(0));
+        assertThat(status.lastRequestedSeqNo(), equalTo(63L));
+        assertThat(status.leaderGlobalCheckpoint(), equalTo(63L));
     }
 
     public void testReceiveRetryableErrorRetriedTooManyTimes() {
@@ -205,10 +205,10 @@ public class ShardFollowNodeTaskTests extends ESTestCase {
         assertThat(fatalError, notNullValue());
         assertThat(fatalError.getMessage(), containsString("retrying failed ["));
         ShardFollowNodeTask.Status status = task.getStatus();
-        assertThat(status.getNumberOfConcurrentReads(), equalTo(1));
-        assertThat(status.getNumberOfConcurrentWrites(), equalTo(0));
-        assertThat(status.getLastRequestedSeqno(), equalTo(63L));
-        assertThat(status.getLeaderGlobalCheckpoint(), equalTo(63L));
+        assertThat(status.numberOfConcurrentReads(), equalTo(1));
+        assertThat(status.numberOfConcurrentWrites(), equalTo(0));
+        assertThat(status.lastRequestedSeqNo(), equalTo(63L));
+        assertThat(status.leaderGlobalCheckpoint(), equalTo(63L));
     }
 
     public void testReceiveNonRetryableError() {
@@ -226,10 +226,10 @@ public class ShardFollowNodeTaskTests extends ESTestCase {
         assertThat(task.isStopped(), equalTo(true));
         assertThat(fatalError, sameInstance(failure));
         ShardFollowNodeTask.Status status = task.getStatus();
-        assertThat(status.getNumberOfConcurrentReads(), equalTo(1));
-        assertThat(status.getNumberOfConcurrentWrites(), equalTo(0));
-        assertThat(status.getLastRequestedSeqno(), equalTo(63L));
-        assertThat(status.getLeaderGlobalCheckpoint(), equalTo(63L));
+        assertThat(status.numberOfConcurrentReads(), equalTo(1));
+        assertThat(status.numberOfConcurrentWrites(), equalTo(0));
+        assertThat(status.lastRequestedSeqNo(), equalTo(63L));
+        assertThat(status.leaderGlobalCheckpoint(), equalTo(63L));
     }
 
     public void testHandleReadResponse() {
@@ -244,13 +244,13 @@ public class ShardFollowNodeTaskTests extends ESTestCase {
         assertThat(bulkShardOperationRequests.get(0), equalTo(Arrays.asList(response.getOperations())));
 
         ShardFollowNodeTask.Status status = task.getStatus();
-        assertThat(status.getIndexMetadataVersion(), equalTo(0L));
-        assertThat(status.getNumberOfConcurrentReads(), equalTo(1));
-        assertThat(status.getNumberOfConcurrentReads(), equalTo(1));
-        assertThat(status.getNumberOfConcurrentWrites(), equalTo(1));
-        assertThat(status.getLastRequestedSeqno(), equalTo(63L));
-        assertThat(status.getLeaderGlobalCheckpoint(), equalTo(63L));
-        assertThat(status.getFollowerGlobalCheckpoint(), equalTo(-1L));
+        assertThat(status.indexMetadataVersion(), equalTo(0L));
+        assertThat(status.numberOfConcurrentReads(), equalTo(1));
+        assertThat(status.numberOfConcurrentReads(), equalTo(1));
+        assertThat(status.numberOfConcurrentWrites(), equalTo(1));
+        assertThat(status.lastRequestedSeqNo(), equalTo(63L));
+        assertThat(status.leaderGlobalCheckpoint(), equalTo(63L));
+        assertThat(status.followerGlobalCheckpoint(), equalTo(-1L));
     }
 
     public void testReceiveLessThanRequested() {
@@ -271,10 +271,10 @@ public class ShardFollowNodeTaskTests extends ESTestCase {
         assertThat(shardChangesRequests.get(0)[1], equalTo(64L));
 
         ShardFollowNodeTask.Status status = task.getStatus();
-        assertThat(status.getNumberOfConcurrentReads(), equalTo(1));
-        assertThat(status.getNumberOfConcurrentWrites(), equalTo(1));
-        assertThat(status.getLastRequestedSeqno(), equalTo(63L));
-        assertThat(status.getLeaderGlobalCheckpoint(), equalTo(63L));
+        assertThat(status.numberOfConcurrentReads(), equalTo(1));
+        assertThat(status.numberOfConcurrentWrites(), equalTo(1));
+        assertThat(status.lastRequestedSeqNo(), equalTo(63L));
+        assertThat(status.leaderGlobalCheckpoint(), equalTo(63L));
     }
 
     public void testCancelAndReceiveLessThanRequested() {
@@ -294,10 +294,10 @@ public class ShardFollowNodeTaskTests extends ESTestCase {
         assertThat(shardChangesRequests.size(), equalTo(0));
         assertThat(bulkShardOperationRequests.size(), equalTo(0));
         ShardFollowNodeTask.Status status = task.getStatus();
-        assertThat(status.getNumberOfConcurrentReads(), equalTo(0));
-        assertThat(status.getNumberOfConcurrentWrites(), equalTo(0));
-        assertThat(status.getLastRequestedSeqno(), equalTo(63L));
-        assertThat(status.getLeaderGlobalCheckpoint(), equalTo(63L));
+        assertThat(status.numberOfConcurrentReads(), equalTo(0));
+        assertThat(status.numberOfConcurrentWrites(), equalTo(0));
+        assertThat(status.lastRequestedSeqNo(), equalTo(63L));
+        assertThat(status.leaderGlobalCheckpoint(), equalTo(63L));
     }
 
     public void testReceiveNothingExpectedSomething() {
@@ -318,10 +318,10 @@ public class ShardFollowNodeTaskTests extends ESTestCase {
         assertThat(shardChangesRequests.get(0)[1], equalTo(64L));
 
         ShardFollowNodeTask.Status status = task.getStatus();
-        assertThat(status.getNumberOfConcurrentReads(), equalTo(1));
-        assertThat(status.getNumberOfConcurrentWrites(), equalTo(0));
-        assertThat(status.getLastRequestedSeqno(), equalTo(63L));
-        assertThat(status.getLeaderGlobalCheckpoint(), equalTo(63L));
+        assertThat(status.numberOfConcurrentReads(), equalTo(1));
+        assertThat(status.numberOfConcurrentWrites(), equalTo(0));
+        assertThat(status.lastRequestedSeqNo(), equalTo(63L));
+        assertThat(status.leaderGlobalCheckpoint(), equalTo(63L));
     }
 
     public void testDelayCoordinatesRead() {
@@ -360,12 +360,12 @@ public class ShardFollowNodeTaskTests extends ESTestCase {
         assertThat(bulkShardOperationRequests.get(0), equalTo(Arrays.asList(response.getOperations())));
 
         ShardFollowNodeTask.Status status = task.getStatus();
-        assertThat(status.getIndexMetadataVersion(), equalTo(1L));
-        assertThat(status.getNumberOfConcurrentReads(), equalTo(1));
-        assertThat(status.getNumberOfConcurrentWrites(), equalTo(1));
-        assertThat(status.getLastRequestedSeqno(), equalTo(63L));
-        assertThat(status.getLeaderGlobalCheckpoint(), equalTo(63L));
-        assertThat(status.getFollowerGlobalCheckpoint(), equalTo(-1L));
+        assertThat(status.indexMetadataVersion(), equalTo(1L));
+        assertThat(status.numberOfConcurrentReads(), equalTo(1));
+        assertThat(status.numberOfConcurrentWrites(), equalTo(1));
+        assertThat(status.lastRequestedSeqNo(), equalTo(63L));
+        assertThat(status.leaderGlobalCheckpoint(), equalTo(63L));
+        assertThat(status.followerGlobalCheckpoint(), equalTo(-1L));
     }
 
     public void testMappingUpdateRetryableError() {
@@ -385,11 +385,11 @@ public class ShardFollowNodeTaskTests extends ESTestCase {
         assertThat(bulkShardOperationRequests.size(), equalTo(1));
         assertThat(task.isStopped(), equalTo(false));
         ShardFollowNodeTask.Status status = task.getStatus();
-        assertThat(status.getIndexMetadataVersion(), equalTo(1L));
-        assertThat(status.getNumberOfConcurrentReads(), equalTo(1));
-        assertThat(status.getNumberOfConcurrentWrites(), equalTo(1));
-        assertThat(status.getLastRequestedSeqno(), equalTo(63L));
-        assertThat(status.getLeaderGlobalCheckpoint(), equalTo(63L));
+        assertThat(status.indexMetadataVersion(), equalTo(1L));
+        assertThat(status.numberOfConcurrentReads(), equalTo(1));
+        assertThat(status.numberOfConcurrentWrites(), equalTo(1));
+        assertThat(status.lastRequestedSeqNo(), equalTo(63L));
+        assertThat(status.leaderGlobalCheckpoint(), equalTo(63L));
 
     }
 
@@ -411,11 +411,11 @@ public class ShardFollowNodeTaskTests extends ESTestCase {
         assertThat(bulkShardOperationRequests.size(), equalTo(0));
         assertThat(task.isStopped(), equalTo(true));
         ShardFollowNodeTask.Status status = task.getStatus();
-        assertThat(status.getIndexMetadataVersion(), equalTo(0L));
-        assertThat(status.getNumberOfConcurrentReads(), equalTo(1));
-        assertThat(status.getNumberOfConcurrentWrites(), equalTo(0));
-        assertThat(status.getLastRequestedSeqno(), equalTo(63L));
-        assertThat(status.getLeaderGlobalCheckpoint(), equalTo(63L));
+        assertThat(status.indexMetadataVersion(), equalTo(0L));
+        assertThat(status.numberOfConcurrentReads(), equalTo(1));
+        assertThat(status.numberOfConcurrentWrites(), equalTo(0));
+        assertThat(status.lastRequestedSeqNo(), equalTo(63L));
+        assertThat(status.leaderGlobalCheckpoint(), equalTo(63L));
     }
 
     public void testMappingUpdateNonRetryableError() {
@@ -430,11 +430,11 @@ public class ShardFollowNodeTaskTests extends ESTestCase {
         assertThat(bulkShardOperationRequests.size(), equalTo(0));
         assertThat(task.isStopped(), equalTo(true));
         ShardFollowNodeTask.Status status = task.getStatus();
-        assertThat(status.getIndexMetadataVersion(), equalTo(0L));
-        assertThat(status.getNumberOfConcurrentReads(), equalTo(1));
-        assertThat(status.getNumberOfConcurrentWrites(), equalTo(0));
-        assertThat(status.getLastRequestedSeqno(), equalTo(63L));
-        assertThat(status.getLeaderGlobalCheckpoint(), equalTo(63L));
+        assertThat(status.indexMetadataVersion(), equalTo(0L));
+        assertThat(status.numberOfConcurrentReads(), equalTo(1));
+        assertThat(status.numberOfConcurrentWrites(), equalTo(0));
+        assertThat(status.lastRequestedSeqNo(), equalTo(63L));
+        assertThat(status.leaderGlobalCheckpoint(), equalTo(63L));
     }
 
     public void testCoordinateWrites() {
@@ -454,11 +454,11 @@ public class ShardFollowNodeTaskTests extends ESTestCase {
         assertThat(bulkShardOperationRequests.get(0), equalTo(Arrays.asList(response.getOperations())));
 
         ShardFollowNodeTask.Status status = task.getStatus();
-        assertThat(status.getNumberOfConcurrentReads(), equalTo(1));
-        assertThat(status.getNumberOfConcurrentWrites(), equalTo(1));
-        assertThat(status.getLastRequestedSeqno(), equalTo(63L));
-        assertThat(status.getLeaderGlobalCheckpoint(), equalTo(63L));
-        assertThat(status.getFollowerGlobalCheckpoint(), equalTo(-1L));
+        assertThat(status.numberOfConcurrentReads(), equalTo(1));
+        assertThat(status.numberOfConcurrentWrites(), equalTo(1));
+        assertThat(status.lastRequestedSeqNo(), equalTo(63L));
+        assertThat(status.leaderGlobalCheckpoint(), equalTo(63L));
+        assertThat(status.followerGlobalCheckpoint(), equalTo(-1L));
     }
 
     public void testMaxConcurrentWrites() {
@@ -472,7 +472,7 @@ public class ShardFollowNodeTaskTests extends ESTestCase {
         assertThat(bulkShardOperationRequests.get(1), equalTo(Arrays.asList(response.getOperations()).subList(64, 128)));
 
         ShardFollowNodeTask.Status status = task.getStatus();
-        assertThat(status.getNumberOfConcurrentWrites(), equalTo(2));
+        assertThat(status.numberOfConcurrentWrites(), equalTo(2));
 
         task = createShardFollowTask(64, 1, 4, Integer.MAX_VALUE, Long.MAX_VALUE);
         response = generateShardChangesResponse(0, 256, 0L, 256L);
@@ -486,7 +486,7 @@ public class ShardFollowNodeTaskTests extends ESTestCase {
         assertThat(bulkShardOperationRequests.get(3), equalTo(Arrays.asList(response.getOperations()).subList(192, 256)));
 
         status = task.getStatus();
-        assertThat(status.getNumberOfConcurrentWrites(), equalTo(4));
+        assertThat(status.numberOfConcurrentWrites(), equalTo(4));
     }
 
     public void testMaxBatchOperationCount() {
@@ -502,7 +502,7 @@ public class ShardFollowNodeTaskTests extends ESTestCase {
         }
 
         ShardFollowNodeTask.Status status = task.getStatus();
-        assertThat(status.getNumberOfConcurrentWrites(), equalTo(32));
+        assertThat(status.numberOfConcurrentWrites(), equalTo(32));
     }
 
     public void testRetryableError() {
@@ -529,8 +529,8 @@ public class ShardFollowNodeTaskTests extends ESTestCase {
         }
         assertThat(task.isStopped(), equalTo(false));
         ShardFollowNodeTask.Status status = task.getStatus();
-        assertThat(status.getNumberOfConcurrentWrites(), equalTo(1));
-        assertThat(status.getFollowerGlobalCheckpoint(), equalTo(-1L));
+        assertThat(status.numberOfConcurrentWrites(), equalTo(1));
+        assertThat(status.followerGlobalCheckpoint(), equalTo(-1L));
     }
 
     public void testRetryableErrorRetriedTooManyTimes() {
@@ -557,8 +557,8 @@ public class ShardFollowNodeTaskTests extends ESTestCase {
         }
         assertThat(task.isStopped(), equalTo(true));
         ShardFollowNodeTask.Status status = task.getStatus();
-        assertThat(status.getNumberOfConcurrentWrites(), equalTo(1));
-        assertThat(status.getFollowerGlobalCheckpoint(), equalTo(-1L));
+        assertThat(status.numberOfConcurrentWrites(), equalTo(1));
+        assertThat(status.followerGlobalCheckpoint(), equalTo(-1L));
     }
 
     public void testNonRetryableError() {
@@ -579,8 +579,8 @@ public class ShardFollowNodeTaskTests extends ESTestCase {
         assertThat(bulkShardOperationRequests.get(0), equalTo(Arrays.asList(response.getOperations())));
         assertThat(task.isStopped(), equalTo(true));
         ShardFollowNodeTask.Status status = task.getStatus();
-        assertThat(status.getNumberOfConcurrentWrites(), equalTo(1));
-        assertThat(status.getFollowerGlobalCheckpoint(), equalTo(-1L));
+        assertThat(status.numberOfConcurrentWrites(), equalTo(1));
+        assertThat(status.followerGlobalCheckpoint(), equalTo(-1L));
     }
 
     public void testMaxBatchBytesLimit() {
@@ -623,10 +623,10 @@ public class ShardFollowNodeTaskTests extends ESTestCase {
         assertThat(shardChangesRequests.get(0)[1], equalTo(64L));
 
         ShardFollowNodeTask.Status status = task.getStatus();
-        assertThat(status.getNumberOfConcurrentReads(), equalTo(1));
-        assertThat(status.getLastRequestedSeqno(), equalTo(63L));
-        assertThat(status.getLeaderGlobalCheckpoint(), equalTo(63L));
-        assertThat(status.getFollowerGlobalCheckpoint(), equalTo(63L));
+        assertThat(status.numberOfConcurrentReads(), equalTo(1));
+        assertThat(status.lastRequestedSeqNo(), equalTo(63L));
+        assertThat(status.leaderGlobalCheckpoint(), equalTo(63L));
+        assertThat(status.followerGlobalCheckpoint(), equalTo(63L));
     }
 
     ShardFollowNodeTask createShardFollowTask(int maxBatchOperationCount, int maxConcurrentReadBatches, int maxConcurrentWriteBatches,
