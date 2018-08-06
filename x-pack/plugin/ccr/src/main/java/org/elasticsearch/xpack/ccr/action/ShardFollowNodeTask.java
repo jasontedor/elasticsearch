@@ -58,16 +58,15 @@ public abstract class ShardFollowNodeTask extends AllocatedPersistentTask {
     public static final long DEFAULT_MAX_BATCH_SIZE_IN_BYTES = Long.MAX_VALUE;
     private static final int RETRY_LIMIT = 10;
     public static final TimeValue DEFAULT_RETRY_TIMEOUT = new TimeValue(500);
-    public static final TimeValue DEFAULT_IDLE_SHARD_RETRY_DELAY = TimeValue.timeValueSeconds(10);
 
     private static final Logger LOGGER = Loggers.getLogger(ShardFollowNodeTask.class);
 
     private final ShardFollowTask params;
     private final TimeValue retryTimeout;
-    private final TimeValue idleShardChangesRequestDelay;
     private final BiConsumer<TimeValue, Runnable> scheduler;
     private final LongSupplier relativeTimeProvider;
 
+    private boolean pollingLeaderGlobalCheckpoint;
     private long leaderGlobalCheckpoint;
     private long leaderMaxSeqNo;
     private long lastRequestedSeqNo;
@@ -94,7 +93,6 @@ public abstract class ShardFollowNodeTask extends AllocatedPersistentTask {
         this.scheduler = scheduler;
         this.relativeTimeProvider = relativeTimeProvider;
         this.retryTimeout = params.getRetryTimeout();
-        this.idleShardChangesRequestDelay = params.getIdleShardRetryDelay();
     }
 
     void start(
@@ -117,13 +115,19 @@ public abstract class ShardFollowNodeTask extends AllocatedPersistentTask {
         // Forcefully updates follower mapping, this gets us the leader imd version and
         // makes sure that leader and follower mapping are identical.
         updateMapping(imdVersion -> {
+            LOGGER.info("{} started to follow leader shard {}, followGlobalCheckPoint={}, indexMetaDataVersion={}",
+                    params.getFollowShardId(), params.getLeaderShardId(), followerGlobalCheckpoint, imdVersion);
             synchronized (ShardFollowNodeTask.this) {
                 currentIndexMetadataVersion = imdVersion;
+                sendGlobalCheckpointPoll(leaderGlobalCheckpoint, this::finishLeaderGlobalCheckpointPoll);
             }
-            LOGGER.info("{} Started to follow leader shard {}, followGlobalCheckPoint={}, indexMetaDataVersion={}",
-                params.getFollowShardId(), params.getLeaderShardId(), followerGlobalCheckpoint, imdVersion);
-            coordinateReads();
         });
+    }
+
+    synchronized void finishLeaderGlobalCheckpointPoll(final long globalCheckpoint) {
+        this.pollingLeaderGlobalCheckpoint = false;
+        this.leaderGlobalCheckpoint = globalCheckpoint;
+        coordinateReads();
     }
 
     synchronized void coordinateReads() {
@@ -155,12 +159,9 @@ public abstract class ShardFollowNodeTask extends AllocatedPersistentTask {
 
         if (numConcurrentReads == 0 && hasReadBudget()) {
             assert lastRequestedSeqNo == leaderGlobalCheckpoint;
-            // We sneak peek if there is any thing new in the leader.
-            // If there is we will happily accept
-            numConcurrentReads++;
-            long from = lastRequestedSeqNo + 1;
-            LOGGER.trace("{}[{}] peek read [{}]", params.getFollowShardId(), numConcurrentReads, from);
-            sendShardChangesRequest(from, maxBatchOperationCount, lastRequestedSeqNo);
+            // we poll until the global checkpoint is updated on the leader
+            LOGGER.trace("{} polling from global checkpoint [{}]", params.getFollowShardId(), leaderGlobalCheckpoint);
+            sendGlobalCheckpointPoll(leaderGlobalCheckpoint, this::finishLeaderGlobalCheckpointPoll);
         }
     }
 
@@ -238,6 +239,16 @@ public abstract class ShardFollowNodeTask extends AllocatedPersistentTask {
                 });
     }
 
+    private void sendGlobalCheckpointPoll(final long globalCheckpoint, final LongConsumer globalCheckpointUpdated) {
+        assert Thread.holdsLock(this);
+        if (pollingLeaderGlobalCheckpoint == false) {
+            pollingLeaderGlobalCheckpoint = true;
+            innerSendGlobalCheckpointPoll(globalCheckpoint, globalCheckpointUpdated);
+        }
+    }
+
+    protected abstract void innerSendGlobalCheckpointPoll(long globalCheckpoint, LongConsumer globalCheckpointUpdated);
+
     void handleReadResponse(long from, long maxRequiredSeqNo, ShardChangesAction.Response response) {
         maybeUpdateMapping(response.getIndexMetadataVersion(), () -> innerHandleReadResponse(from, maxRequiredSeqNo, response));
     }
@@ -277,11 +288,9 @@ public abstract class ShardFollowNodeTask extends AllocatedPersistentTask {
             // read is completed, decrement
             numConcurrentReads--;
             if (response.getOperations().length == 0 && leaderGlobalCheckpoint == lastRequestedSeqNo)  {
-                // we got nothing and we have no reason to believe asking again well get us more, treat shard as idle and delay
-                // future requests
-                LOGGER.trace("{} received no ops and no known ops to fetch, scheduling to coordinate reads",
-                    params.getFollowShardId());
-                scheduler.accept(idleShardChangesRequestDelay, this::coordinateReads);
+                // we got nothing and we have no reason to believe asking again well get us more, treat shard as idle and poll for updates
+                LOGGER.trace("{} received no ops and no known ops to fetch, polling to coordinate reads", params.getFollowShardId());
+                sendGlobalCheckpointPoll(leaderGlobalCheckpoint, this::finishLeaderGlobalCheckpointPoll);
             } else {
                 coordinateReads();
             }

@@ -7,6 +7,7 @@ package org.elasticsearch.xpack.ccr.action;
 
 import com.carrotsearch.hppc.LongHashSet;
 import com.carrotsearch.hppc.LongSet;
+import org.apache.lucene.util.SetOnce;
 import org.elasticsearch.Version;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.DocWriteResponse;
@@ -15,6 +16,7 @@ import org.elasticsearch.action.delete.DeleteRequest;
 import org.elasticsearch.action.support.replication.TransportWriteAction;
 import org.elasticsearch.cluster.metadata.IndexMetaData;
 import org.elasticsearch.cluster.routing.ShardRouting;
+import org.elasticsearch.common.Randomness;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.index.IndexSettings;
@@ -23,6 +25,7 @@ import org.elasticsearch.index.engine.EngineFactory;
 import org.elasticsearch.index.replication.ESIndexLevelReplicationTestCase;
 import org.elasticsearch.index.seqno.SeqNoStats;
 import org.elasticsearch.index.shard.IndexShard;
+import org.elasticsearch.index.shard.IndexShardClosedException;
 import org.elasticsearch.index.shard.ShardId;
 import org.elasticsearch.index.translog.Translog;
 import org.elasticsearch.threadpool.ThreadPool;
@@ -37,11 +40,16 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.LongConsumer;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
+import static org.elasticsearch.index.seqno.SequenceNumbers.UNASSIGNED_SEQ_NO;
 import static org.hamcrest.Matchers.equalTo;
 
 public class ShardFollowTaskReplicationTests extends ESIndexLevelReplicationTestCase {
@@ -159,7 +167,7 @@ public class ShardFollowTaskReplicationTests extends ESIndexLevelReplicationTest
     private ShardFollowNodeTask createShardFollowTask(ReplicationGroup leaderGroup, ReplicationGroup followerGroup) {
         ShardFollowTask params = new ShardFollowTask(null, new ShardId("follow_index", "", 0),
             new ShardId("leader_index", "", 0), between(1, 64), between(1, 8), Long.MAX_VALUE, between(1, 4), 10240,
-            TimeValue.timeValueMillis(10), TimeValue.timeValueMillis(10), Collections.emptyMap());
+            TimeValue.timeValueMillis(10), Collections.emptyMap());
 
         BiConsumer<TimeValue, Runnable> scheduler = (delay, task) -> threadPool.schedule(delay, ThreadPool.Names.GENERIC, task);
         AtomicBoolean stopped = new AtomicBoolean(false);
@@ -222,6 +230,43 @@ public class ShardFollowTaskReplicationTests extends ESIndexLevelReplicationTest
                     errorHandler.accept(exception);
                 };
                 threadPool.executor(ThreadPool.Names.GENERIC).execute(task);
+            }
+
+            @Override
+            protected void innerSendGlobalCheckpointPoll(final long globalCheckpoint, final LongConsumer globalCheckpointUpdated) {
+                final Runnable command = () -> {
+                    final List<IndexShard> indexShards =
+                            Stream.concat(Stream.of(leaderGroup.getPrimary()), leaderGroup.getReplicas().stream()).collect(Collectors.toList());
+                    Randomness.shuffle(indexShards);
+
+                    final SetOnce<IndexShardClosedException> reference = new SetOnce<>();
+                    for (final IndexShard indexShard : indexShards) {
+                        final CountDownLatch latch = new CountDownLatch(1);
+                        indexShard.addGlobalCheckpointListener(
+                                globalCheckpoint,
+                                (g, e) -> {
+                                    if (g != UNASSIGNED_SEQ_NO) {
+                                        assert e == null;
+                                        globalCheckpointUpdated.accept(g);
+                                        latch.countDown();
+                                    } else {
+                                        reference.set(e);
+                                        latch.countDown();
+                                    }
+                                });
+                        try {
+                            latch.await();
+                        } catch (final InterruptedException e) {
+                            throw new RuntimeException(e);
+                        }
+                        if (reference.get() != null) {
+                            return;
+                        }
+                    }
+                    assert reference.get() != null;
+                    throw new RuntimeException(reference.get()); // add error handling!!!
+                };
+                threadPool.generic().execute(command);
             }
 
             @Override

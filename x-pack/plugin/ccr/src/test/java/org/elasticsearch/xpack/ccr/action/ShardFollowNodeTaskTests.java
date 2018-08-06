@@ -634,7 +634,7 @@ public class ShardFollowNodeTaskTests extends ESTestCase {
         AtomicBoolean stopped = new AtomicBoolean(false);
         ShardFollowTask params = new ShardFollowTask(null, new ShardId("follow_index", "", 0),
             new ShardId("leader_index", "", 0), maxBatchOperationCount, maxConcurrentReadBatches, maxBatchSizeInBytes,
-            maxConcurrentWriteBatches, bufferWriteLimit, TimeValue.ZERO, TimeValue.ZERO, Collections.emptyMap());
+            maxConcurrentWriteBatches, bufferWriteLimit, TimeValue.ZERO, Collections.emptyMap());
 
         shardChangesRequests = new ArrayList<>();
         bulkShardOperationRequests = new ArrayList<>();
@@ -688,6 +688,11 @@ public class ShardFollowNodeTaskTests extends ESTestCase {
                 if (readFailure != null) {
                     errorHandler.accept(readFailure);
                 }
+            }
+
+            @Override
+            protected void innerSendGlobalCheckpointPoll(long globalCheckpoint, LongConsumer globalCheckpointUpdated) {
+
             }
 
             @Override

@@ -85,7 +85,7 @@ public class FollowIndexAction extends Action<FollowIndexAction.Response> {
                     followerIndex = (String) args[1];
                 }
                 return new Request((String) args[0], followerIndex, (Integer) args[2], (Integer) args[3], (Long) args[4],
-                    (Integer) args[5], (Integer) args[6], (TimeValue) args[7], (TimeValue) args[8]);
+                    (Integer) args[5], (Integer) args[6], (TimeValue) args[7]);
         });
 
         static {
@@ -99,9 +99,6 @@ public class FollowIndexAction extends Action<FollowIndexAction.Response> {
             PARSER.declareField(ConstructingObjectParser.optionalConstructorArg(),
                 (p, c) -> TimeValue.parseTimeValue(p.text(), ShardFollowTask.RETRY_TIMEOUT.getPreferredName()),
                 ShardFollowTask.RETRY_TIMEOUT, ObjectParser.ValueType.STRING);
-            PARSER.declareField(ConstructingObjectParser.optionalConstructorArg(),
-                (p, c) -> TimeValue.parseTimeValue(p.text(), ShardFollowTask.IDLE_SHARD_RETRY_DELAY.getPreferredName()),
-                ShardFollowTask.IDLE_SHARD_RETRY_DELAY, ObjectParser.ValueType.STRING);
         }
 
         public static Request fromXContent(XContentParser parser, String followerIndex) throws IOException {
@@ -126,11 +123,10 @@ public class FollowIndexAction extends Action<FollowIndexAction.Response> {
         private int maxConcurrentWriteBatches;
         private int maxWriteBufferSize;
         private TimeValue retryTimeout;
-        private TimeValue idleShardRetryDelay;
 
         public Request(String leaderIndex, String followerIndex, Integer maxBatchOperationCount, Integer maxConcurrentReadBatches,
                        Long maxOperationSizeInBytes, Integer maxConcurrentWriteBatches, Integer maxWriteBufferSize,
-                       TimeValue retryTimeout, TimeValue idleShardRetryDelay) {
+                       TimeValue retryTimeout) {
             if (leaderIndex == null) {
                 throw new IllegalArgumentException("leader_index is missing");
             }
@@ -155,10 +151,6 @@ public class FollowIndexAction extends Action<FollowIndexAction.Response> {
             if (retryTimeout == null) {
                 retryTimeout = ShardFollowNodeTask.DEFAULT_RETRY_TIMEOUT;
             }
-            if (idleShardRetryDelay == null) {
-                idleShardRetryDelay = ShardFollowNodeTask.DEFAULT_IDLE_SHARD_RETRY_DELAY;
-            }
-
             if (maxBatchOperationCount < 1) {
                 throw new IllegalArgumentException("maxBatchOperationCount must be larger than 0");
             }
@@ -183,7 +175,6 @@ public class FollowIndexAction extends Action<FollowIndexAction.Response> {
             this.maxConcurrentWriteBatches = maxConcurrentWriteBatches;
             this.maxWriteBufferSize = maxWriteBufferSize;
             this.retryTimeout = retryTimeout;
-            this.idleShardRetryDelay = idleShardRetryDelay;
         }
 
         Request() {
@@ -217,7 +208,6 @@ public class FollowIndexAction extends Action<FollowIndexAction.Response> {
             maxConcurrentWriteBatches = in.readVInt();
             maxWriteBufferSize = in.readVInt();
             retryTimeout = in.readOptionalTimeValue();
-            idleShardRetryDelay = in.readOptionalTimeValue();
         }
 
         @Override
@@ -231,7 +221,6 @@ public class FollowIndexAction extends Action<FollowIndexAction.Response> {
             out.writeVInt(maxConcurrentWriteBatches);
             out.writeVInt(maxWriteBufferSize);
             out.writeOptionalTimeValue(retryTimeout);
-            out.writeOptionalTimeValue(idleShardRetryDelay);
         }
 
         @Override
@@ -246,7 +235,6 @@ public class FollowIndexAction extends Action<FollowIndexAction.Response> {
                 builder.field(ShardFollowTask.MAX_CONCURRENT_READ_BATCHES.getPreferredName(), maxConcurrentReadBatches);
                 builder.field(ShardFollowTask.MAX_CONCURRENT_WRITE_BATCHES.getPreferredName(), maxConcurrentWriteBatches);
                 builder.field(ShardFollowTask.RETRY_TIMEOUT.getPreferredName(), retryTimeout.getStringRep());
-                builder.field(ShardFollowTask.IDLE_SHARD_RETRY_DELAY.getPreferredName(), idleShardRetryDelay.getStringRep());
             }
             builder.endObject();
             return builder;
@@ -263,7 +251,6 @@ public class FollowIndexAction extends Action<FollowIndexAction.Response> {
                 maxConcurrentWriteBatches == request.maxConcurrentWriteBatches &&
                 maxWriteBufferSize == request.maxWriteBufferSize &&
                 Objects.equals(retryTimeout, request.retryTimeout) &&
-                Objects.equals(idleShardRetryDelay, request.idleShardRetryDelay) &&
                 Objects.equals(leaderIndex, request.leaderIndex) &&
                 Objects.equals(followerIndex, request.followerIndex);
         }
@@ -271,7 +258,7 @@ public class FollowIndexAction extends Action<FollowIndexAction.Response> {
         @Override
         public int hashCode() {
             return Objects.hash(leaderIndex, followerIndex, maxBatchOperationCount, maxConcurrentReadBatches, maxOperationSizeInBytes,
-                maxConcurrentWriteBatches, maxWriteBufferSize, retryTimeout, idleShardRetryDelay);
+                maxConcurrentWriteBatches, maxWriteBufferSize, retryTimeout);
         }
     }
 
@@ -372,7 +359,7 @@ public class FollowIndexAction extends Action<FollowIndexAction.Response> {
                         new ShardId(leaderIndexMetadata.getIndex(), shardId),
                         request.maxBatchOperationCount, request.maxConcurrentReadBatches, request.maxOperationSizeInBytes,
                         request.maxConcurrentWriteBatches, request.maxWriteBufferSize, request.retryTimeout,
-                        request.idleShardRetryDelay, filteredHeaders);
+                        filteredHeaders);
                 persistentTasksService.sendStartRequest(taskId, ShardFollowTask.NAME, shardFollowTask,
                         new ActionListener<PersistentTasksCustomMetaData.PersistentTask<ShardFollowTask>>() {
                             @Override

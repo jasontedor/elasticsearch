@@ -294,7 +294,7 @@ public class ShardChangesIT extends ESIntegTestCase {
 
         final FollowIndexAction.Request followRequest = new FollowIndexAction.Request("index1", "index2", maxReadSize,
             randomIntBetween(2, 10), Long.MAX_VALUE, randomIntBetween(2, 10),
-            randomIntBetween(1024, 10240), TimeValue.timeValueMillis(500), TimeValue.timeValueMillis(10));
+            randomIntBetween(1024, 10240), TimeValue.timeValueMillis(500));
         CreateAndFollowIndexAction.Request createAndFollowRequest = new CreateAndFollowIndexAction.Request(followRequest);
         client().execute(CreateAndFollowIndexAction.INSTANCE, createAndFollowRequest).get();
 
@@ -335,7 +335,7 @@ public class ShardChangesIT extends ESIntegTestCase {
 
         final FollowIndexAction.Request followRequest = new FollowIndexAction.Request("index1", "index2", randomIntBetween(32, 2048),
             randomIntBetween(2, 10), Long.MAX_VALUE, randomIntBetween(2, 10),
-            ShardFollowNodeTask.DEFAULT_MAX_WRITE_BUFFER_SIZE, TimeValue.timeValueMillis(500), TimeValue.timeValueMillis(10));
+            ShardFollowNodeTask.DEFAULT_MAX_WRITE_BUFFER_SIZE, TimeValue.timeValueMillis(500));
         client().execute(FollowIndexAction.INSTANCE, followRequest).get();
 
         long maxNumDocsReplicated = Math.min(3000, randomLongBetween(followRequest.getMaxBatchOperationCount(),
@@ -473,7 +473,7 @@ public class ShardChangesIT extends ESIntegTestCase {
         }
 
         final FollowIndexAction.Request followRequest = new FollowIndexAction.Request("index1", "index2", 1024, 1, 1024L,
-            1, 10240, TimeValue.timeValueMillis(500), TimeValue.timeValueMillis(10));
+            1, 10240, TimeValue.timeValueMillis(500));
         final CreateAndFollowIndexAction.Request createAndFollowRequest = new CreateAndFollowIndexAction.Request(followRequest);
         client().execute(CreateAndFollowIndexAction.INSTANCE, createAndFollowRequest).get();
 
@@ -681,6 +681,6 @@ public class ShardChangesIT extends ESIntegTestCase {
         return new FollowIndexAction.Request(leaderIndex, followIndex, ShardFollowNodeTask.DEFAULT_MAX_BATCH_OPERATION_COUNT,
             ShardFollowNodeTask.DEFAULT_MAX_CONCURRENT_READ_BATCHES, ShardFollowNodeTask.DEFAULT_MAX_BATCH_SIZE_IN_BYTES,
             ShardFollowNodeTask.DEFAULT_MAX_CONCURRENT_WRITE_BATCHES, ShardFollowNodeTask.DEFAULT_MAX_WRITE_BUFFER_SIZE,
-            TimeValue.timeValueMillis(10), TimeValue.timeValueMillis(10));
+            TimeValue.timeValueMillis(10));
     }
 }

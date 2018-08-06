@@ -139,6 +139,27 @@ public class ShardFollowTasksExecutor extends PersistentTasksExecutor<ShardFollo
                 request.setMaxOperationSizeInBytes(params.getMaxBatchSizeInBytes());
                 leaderClient.execute(ShardChangesAction.INSTANCE, request, ActionListener.wrap(handler::accept, errorHandler));
             }
+
+            @Override
+            protected void innerSendGlobalCheckpointPoll(final long globalCheckpoint, final LongConsumer globalCheckpointUpdated) {
+                final GlobalCheckpointPollAction.Request request = new GlobalCheckpointPollAction.Request(params.getLeaderShardId());
+                request.setGlobalCheckpoint(globalCheckpoint);
+                leaderClient.execute(
+                        GlobalCheckpointPollAction.INSTANCE,
+                        request,
+                        new ActionListener<GlobalCheckpointPollAction.Response>() {
+                            @Override
+                            public void onResponse(final GlobalCheckpointPollAction.Response response) {
+                                assert globalCheckpoint > response.getGlobalCheckpoint();
+                                globalCheckpointUpdated.accept(response.getGlobalCheckpoint());
+                            }
+
+                            @Override
+                            public void onFailure(final Exception e) {
+
+                            }
+                });
+            }
         };
     }
 

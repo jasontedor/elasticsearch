@@ -38,6 +38,7 @@ import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.xpack.ccr.action.CcrStatsAction;
 import org.elasticsearch.xpack.ccr.action.CreateAndFollowIndexAction;
 import org.elasticsearch.xpack.ccr.action.FollowIndexAction;
+import org.elasticsearch.xpack.ccr.action.GlobalCheckpointPollAction;
 import org.elasticsearch.xpack.ccr.action.ShardChangesAction;
 import org.elasticsearch.xpack.ccr.action.ShardFollowNodeTask;
 import org.elasticsearch.xpack.ccr.action.ShardFollowTask;
@@ -99,6 +100,9 @@ public class Ccr extends Plugin implements ActionPlugin, PersistentTaskPlugin, E
                 new ActionHandler<>(CcrStatsAction.INSTANCE, TransportCcrStatsAction.class),
                 new ActionHandler<>(CreateAndFollowIndexAction.INSTANCE, CreateAndFollowIndexAction.TransportAction.class),
                 new ActionHandler<>(FollowIndexAction.INSTANCE, FollowIndexAction.TransportAction.class),
+                new ActionHandler<>(
+                        GlobalCheckpointPollAction.INSTANCE,
+                        GlobalCheckpointPollAction.TransportGlobalCheckpointPollAction.class),
                 new ActionHandler<>(ShardChangesAction.INSTANCE, ShardChangesAction.TransportAction.class),
                 new ActionHandler<>(UnfollowIndexAction.INSTANCE, UnfollowIndexAction.TransportAction.class));
     }
