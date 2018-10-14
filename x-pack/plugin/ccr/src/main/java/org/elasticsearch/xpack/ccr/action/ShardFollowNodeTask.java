@@ -72,6 +72,7 @@ public abstract class ShardFollowNodeTask extends AllocatedPersistentTask {
     private int numConcurrentReads = 0;
     private int numConcurrentWrites = 0;
     private long currentMappingVersion = 0;
+    private long currentSettingsVersion = 0;
     private long totalFetchTimeMillis = 0;
     private long numberOfSuccessfulFetches = 0;
     private long numberOfFailedFetches = 0;
@@ -134,9 +135,19 @@ public abstract class ShardFollowNodeTask extends AllocatedPersistentTask {
             synchronized (ShardFollowNodeTask.this) {
                 currentMappingVersion = mappingVersion;
             }
-            LOGGER.info("{} Started to follow leader shard {}, followGlobalCheckPoint={}, mappingVersion={}",
-                params.getFollowShardId(), params.getLeaderShardId(), followerGlobalCheckpoint, mappingVersion);
-            coordinateReads();
+            updateSettings(settingsVersion -> {
+                synchronized (ShardFollowNodeTask.this) {
+                    currentSettingsVersion = settingsVersion;
+                }
+                LOGGER.info(
+                        "{} following leader shard {}, follower global checkpoint=[{}], mapping version=[{}], settings version=[{}]",
+                        params.getFollowShardId(),
+                        params.getLeaderShardId(),
+                        followerGlobalCheckpoint,
+                        mappingVersion,
+                        settingsVersion);
+                coordinateReads();
+            });
         });
     }
 
@@ -263,7 +274,9 @@ public abstract class ShardFollowNodeTask extends AllocatedPersistentTask {
     }
 
     void handleReadResponse(long from, long maxRequiredSeqNo, ShardChangesAction.Response response) {
-        maybeUpdateMapping(response.getMappingVersion(), () -> innerHandleReadResponse(from, maxRequiredSeqNo, response));
+        maybeUpdateMapping(
+                response.getMappingVersion(),
+                () -> maybeUpdateSettings(response.getSettingsVersion(), () -> innerHandleReadResponse(from, maxRequiredSeqNo, response)));
     }
 
     /** Called when some operations are fetched from the leading */
@@ -356,12 +369,35 @@ public abstract class ShardFollowNodeTask extends AllocatedPersistentTask {
         }
     }
 
+    private synchronized void maybeUpdateSettings(final Long minimumRequiredSettingsVersion, Runnable task) {
+        if (currentSettingsVersion >= minimumRequiredSettingsVersion) {
+            LOGGER.trace("{} settings version [{}] is higher or equal than minimum required mapping version [{}]",
+                    params.getFollowShardId(), currentSettingsVersion, minimumRequiredSettingsVersion);
+            task.run();
+        } else {
+            LOGGER.trace("{} updating settings, settings version [{}] is lower than minimum required settings version [{}]",
+                    params.getFollowShardId(), currentSettingsVersion, minimumRequiredSettingsVersion);
+            updateSettings(settingsVersion -> {
+                currentSettingsVersion = settingsVersion;
+                task.run();
+            });
+        }
+    }
+
     private void updateMapping(LongConsumer handler) {
         updateMapping(handler, new AtomicInteger(0));
     }
 
     private void updateMapping(LongConsumer handler, AtomicInteger retryCounter) {
         innerUpdateMapping(handler, e -> handleFailure(e, retryCounter, () -> updateMapping(handler, retryCounter)));
+    }
+
+    private void updateSettings(final LongConsumer handler) {
+        updateSettings(handler, new AtomicInteger());
+    }
+
+    private void updateSettings(final LongConsumer handler, final AtomicInteger retryCounter) {
+        innerUpdateSettings(handler, e -> handleFailure(e, retryCounter, () -> updateSettings(handler, retryCounter)));
     }
 
     private void handleFailure(Exception e, AtomicInteger retryCounter, Runnable task) {
@@ -407,6 +443,8 @@ public abstract class ShardFollowNodeTask extends AllocatedPersistentTask {
 
     // These methods are protected for testing purposes:
     protected abstract void innerUpdateMapping(LongConsumer handler, Consumer<Exception> errorHandler);
+
+    protected abstract void innerUpdateSettings(LongConsumer handler, Consumer<Exception> errorHandler);
 
     protected abstract void innerSendBulkShardOperationsRequest(String followerHistoryUUID,
                                                                 List<Translog.Operation> operations,
