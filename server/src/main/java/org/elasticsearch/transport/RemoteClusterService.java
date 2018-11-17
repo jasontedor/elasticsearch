@@ -174,13 +174,13 @@ public final class RemoteClusterService extends RemoteClusterAware implements Cl
     public static final Setting.AffixSetting<TimeValue> REMOTE_CLUSTER_PING_SCHEDULE = Setting.affixKeySetting(
             "cluster.remote.",
             "transport.ping_schedule",
-            key -> timeSetting(key, TcpTransport.PING_SCHEDULE, Setting.Property.NodeScope),
+            key -> timeSetting(key, TcpTransport.PING_SCHEDULE, Setting.Property.NodeScope, Setting.Property.Dynamic),
             REMOTE_CLUSTERS_SEEDS);
 
     public static final Setting.AffixSetting<Boolean> REMOTE_CLUSTER_COMPRESS = Setting.affixKeySetting(
         "cluster.remote.",
         "transport.compress",
-        key -> boolSetting(key, Transport.TRANSPORT_TCP_COMPRESS, Setting.Property.NodeScope),
+        key -> boolSetting(key, Transport.TRANSPORT_TCP_COMPRESS, Setting.Property.NodeScope, Setting.Property.Dynamic),
         REMOTE_CLUSTERS_SEEDS);
 
     private static final Predicate<DiscoveryNode> DEFAULT_NODE_PREDICATE = (node) -> Version.CURRENT.isCompatible(node.getVersion())
@@ -212,23 +212,32 @@ public final class RemoteClusterService extends RemoteClusterAware implements Cl
         } else {
             CountDown countDown = new CountDown(seeds.size());
             remoteClusters.putAll(this.remoteClusters);
+
             for (Map.Entry<String, Tuple<String, List<Supplier<DiscoveryNode>>>> entry : seeds.entrySet()) {
+                final String clusterAlias = entry.getKey();
                 List<Supplier<DiscoveryNode>> seedList = entry.getValue().v2();
                 String proxyAddress = entry.getValue().v1();
 
-                RemoteClusterConnection remote = this.remoteClusters.get(entry.getKey());
-                if (seedList.isEmpty()) { // with no seed nodes we just remove the connection
-                    try {
-                        IOUtils.close(remote);
-                    } catch (IOException e) {
-                        logger.warn("failed to close remote cluster connections for cluster: " + entry.getKey(), e);
-                    }
-                    remoteClusters.remove(entry.getKey());
+                RemoteClusterConnection remote = this.remoteClusters.get(clusterAlias);
+                if (seedList.isEmpty()) {
+                    // with no seed nodes we just remove the connection
+                    closeQuietly(remote, clusterAlias);
+                    remoteClusters.remove(clusterAlias);
                     continue;
                 }
 
-                if (remote == null) { // this is a new cluster we have to add a new representation
-                    String clusterAlias = entry.getKey();
+                if (remote != null
+                        && (remote.compress() != REMOTE_CLUSTER_COMPRESS.getConcreteSettingForNamespace(clusterAlias).get(settings)
+                        || remote.connectionManager().getPingSchedule().equals(
+                                REMOTE_CLUSTER_PING_SCHEDULE.getConcreteSettingForNamespace(clusterAlias).get(settings)) == false)) {
+                    // remove the connection and treat the cluster as new
+                    closeQuietly(remote, clusterAlias);
+                    remoteClusters.remove(clusterAlias);
+                    remote = null;
+                }
+
+                if (remote == null) {
+                    // this is a new cluster we have to add a new representation
                     TimeValue pingSchedule = REMOTE_CLUSTER_PING_SCHEDULE.getConcreteSettingForNamespace(clusterAlias).get(settings);
                     ConnectionManager connectionManager = new ConnectionManager(settings, transportService.transport,
                         transportService.threadPool, pingSchedule);
@@ -256,6 +265,14 @@ public final class RemoteClusterService extends RemoteClusterAware implements Cl
             }
         }
         this.remoteClusters = Collections.unmodifiableMap(remoteClusters);
+    }
+
+    private void closeQuietly(final RemoteClusterConnection remote, final String clusterAlias) {
+        try {
+            IOUtils.close(remote);
+        } catch (final IOException e) {
+            logger.warn("failed to close remote cluster connections for cluster [{}]", clusterAlias, e);
+        }
     }
 
     static Predicate<DiscoveryNode> getNodePredicate(Settings settings) {

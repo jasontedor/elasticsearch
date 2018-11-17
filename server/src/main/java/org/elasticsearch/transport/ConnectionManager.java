@@ -59,7 +59,13 @@ public class ConnectionManager implements Closeable {
     private final KeyedLock<String> connectionLock = new KeyedLock<>();
     private final Transport transport;
     private final ThreadPool threadPool;
+
     private final TimeValue pingSchedule;
+
+    TimeValue getPingSchedule() {
+        return pingSchedule;
+    }
+
     private final ConnectionProfile defaultProfile;
     private final Lifecycle lifecycle = new Lifecycle();
     private final AtomicBoolean closed = new AtomicBoolean(false);
@@ -249,10 +255,6 @@ public class ConnectionManager implements Closeable {
         if (lifecycle.started() == false) {
             throw new IllegalStateException("connection manager is closed");
         }
-    }
-
-    TimeValue getPingSchedule() {
-        return pingSchedule;
     }
 
     private class ScheduledPing extends AbstractLifecycleRunnable {

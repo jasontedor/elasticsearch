@@ -88,10 +88,20 @@ final class RemoteClusterConnection implements TransportConnectionListener, Clos
 
     private final TransportService transportService;
     private final ConnectionManager connectionManager;
+
+    ConnectionManager connectionManager() {
+        return connectionManager;
+    }
+
     private final ConnectionProfile remoteProfile;
     private final ConnectedNodes connectedNodes;
     private final String clusterAlias;
     private final boolean compress;
+
+    boolean compress() {
+        return compress;
+    }
+
     private final int maxNumRemoteConnections;
     private final Predicate<DiscoveryNode> nodePredicate;
     private final ThreadPool threadPool;
@@ -133,8 +143,8 @@ final class RemoteClusterConnection implements TransportConnectionListener, Clos
         remoteProfile = builder.build();
         connectedNodes = new ConnectedNodes(clusterAlias);
         this.seedNodes = Collections.unmodifiableList(seedNodes);
-        this.skipUnavailable = RemoteClusterService.REMOTE_CLUSTER_SKIP_UNAVAILABLE
-                .getConcreteSettingForNamespace(clusterAlias).get(settings);
+        this.skipUnavailable =
+                RemoteClusterService.REMOTE_CLUSTER_SKIP_UNAVAILABLE.getConcreteSettingForNamespace(clusterAlias).get(settings);
         this.connectHandler = new ConnectHandler();
         this.threadPool = transportService.threadPool;
         this.connectionManager = connectionManager;
