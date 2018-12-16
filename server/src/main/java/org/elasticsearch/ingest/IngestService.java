@@ -254,6 +254,9 @@ public class IngestService implements ClusterStateApplier {
 
     @Override
     public void applyClusterState(final ClusterChangedEvent event) {
+        if (clusterService.localNode().isIngestNode() == false) {
+            return;
+        }
         ClusterState state = event.state();
         Map<String, Pipeline> originalPipelines = pipelines;
         innerUpdatePipelines(event.previousState(), state);

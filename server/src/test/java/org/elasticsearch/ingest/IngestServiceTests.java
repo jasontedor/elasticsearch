@@ -154,6 +154,25 @@ public class IngestServiceTests extends ESTestCase {
         assertThat(ingestService.pipelines().get("_id").getProcessors().get(0).getType(), equalTo("set"));
     }
 
+    public void testUpdatePipelinesNonIngestNode() {
+        IngestService ingestService = createWithProcessors(false);
+        ClusterState clusterState = ClusterState.builder(new ClusterName("_name")).build();
+        ClusterState previousClusterState = clusterState;
+        ingestService.applyClusterState(new ClusterChangedEvent("", clusterState, previousClusterState));
+        assertThat(ingestService.pipelines().size(), is(0));
+
+        PipelineConfiguration pipeline = new PipelineConfiguration(
+                "_id",new BytesArray("{\"processors\": [{\"set\" : {\"field\": \"_field\", \"value\": \"_value\"}}]}"), XContentType.JSON
+        );
+        IngestMetadata ingestMetadata = new IngestMetadata(Collections.singletonMap("_id", pipeline));
+        clusterState = ClusterState.builder(clusterState)
+                .metaData(MetaData.builder().putCustom(IngestMetadata.TYPE, ingestMetadata))
+                .build();
+        ingestService.applyClusterState(new ClusterChangedEvent("", clusterState, previousClusterState));
+        assertThat(ingestService.pipelines().size(), is(0));
+        assertNull(ingestService.pipelines().get("_id"));
+    }
+
     public void testDelete() {
         IngestService ingestService = createWithProcessors();
         PipelineConfiguration config = new PipelineConfiguration(
@@ -930,6 +949,10 @@ public class IngestServiceTests extends ESTestCase {
     }
 
     private static IngestService createWithProcessors() {
+        return createWithProcessors(true);
+    }
+
+    private static IngestService createWithProcessors(final boolean isIngestNode) {
         Map<String, Processor.Factory> processors = new HashMap<>();
         processors.put("set", (factories, tag, config) -> {
             String field = (String) config.remove("field");
@@ -972,15 +995,23 @@ public class IngestServiceTests extends ESTestCase {
                 }
             };
         });
-        return createWithProcessors(processors);
+        return createWithProcessors(isIngestNode, processors);
     }
 
-    private static IngestService createWithProcessors(Map<String, Processor.Factory> processors) {
+    private static IngestService createWithProcessors(final Map<String, Processor.Factory> processors) {
+        return createWithProcessors(true, processors);
+    }
+
+    private static IngestService createWithProcessors(final boolean isIngestNode, final Map<String, Processor.Factory> processors) {
         ThreadPool threadPool = mock(ThreadPool.class);
         final ExecutorService executorService = EsExecutors.newDirectExecutorService();
         when(threadPool.executor(anyString())).thenReturn(executorService);
-        return new IngestService(mock(ClusterService.class), threadPool, null, null,
-            null, Collections.singletonList(new IngestPlugin() {
+        final ClusterService clusterService = mock(ClusterService.class);
+        final DiscoveryNode localNode = mock(DiscoveryNode.class);
+        when(localNode.isIngestNode()).thenReturn(isIngestNode);
+        when(clusterService.localNode()).thenReturn(localNode);
+        return new IngestService(clusterService, threadPool, null, null,
+                null, Collections.singletonList(new IngestPlugin() {
             @Override
             public Map<String, Processor.Factory> getProcessors(final Processor.Parameters parameters) {
                 return processors;
