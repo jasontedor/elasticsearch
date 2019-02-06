@@ -63,6 +63,7 @@ import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.util.BigArrays;
 import org.elasticsearch.common.util.concurrent.AbstractRunnable;
 import org.elasticsearch.common.util.concurrent.AsyncIOProcessor;
+import org.elasticsearch.common.util.concurrent.FutureUtils;
 import org.elasticsearch.common.util.concurrent.RunOnce;
 import org.elasticsearch.common.xcontent.XContentHelper;
 import org.elasticsearch.core.internal.io.IOUtils;
@@ -153,6 +154,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -1739,7 +1741,7 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
     /**
      * Acquires a lock on the translog files and Lucene soft-deleted documents to prevent them from being trimmed
      */
-    public Closeable acquireRetentionLockForPeerRecovery() {
+    public Closeable acquireRetentionLock() {
         return getEngine().acquireRetentionLockForPeerRecovery();
     }
 
@@ -1760,10 +1762,14 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
 
     /**
      * Checks if we have a completed history of operations since the given starting seqno (inclusive).
-     * This method should be called after acquiring the retention lock; See {@link #acquireRetentionLockForPeerRecovery()}
+     * This method should be called after acquiring the retention lock; See {@link #acquireRetentionLock()}
      */
     public boolean hasCompleteHistoryOperations(String source, long startingSeqNo) throws IOException {
         return getEngine().hasCompleteOperationHistory(source, mapperService, startingSeqNo);
+    }
+
+    public long getMinRetainedSeqNo() {
+        return getEngine().getMinRetainedSeqNo();
     }
 
     /**
@@ -1938,7 +1944,25 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
         Objects.requireNonNull(listener);
         assert assertPrimaryMode();
         verifyNotClosed();
-        return replicationTracker.addRetentionLease(id, retainingSequenceNumber, source, listener);
+        try (Closeable ignore = acquireRetentionLock()) {
+            final long minimumRetainingSequenceNumber = getMinRetainedSeqNo();
+            final long actualRetainingSequenceNumber;
+            if (retainingSequenceNumber == -1) {
+                actualRetainingSequenceNumber = minimumRetainingSequenceNumber;
+            } else {
+                if (retainingSequenceNumber < minimumRetainingSequenceNumber) {
+                    final String message = String.format(
+                            "retaining sequence number [%d] can not be satisfied on the primary shard, can only guarantee [%d]",
+                            retainingSequenceNumber,
+                            minimumRetainingSequenceNumber);
+                    throw new IllegalArgumentException(message);
+                }
+                actualRetainingSequenceNumber = retainingSequenceNumber;
+            }
+            return replicationTracker.addRetentionLease(id, actualRetainingSequenceNumber, source, listener);
+        } catch (final IOException e) {
+            throw new AssertionError(e);
+        }
     }
 
     /**

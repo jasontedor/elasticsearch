@@ -757,6 +757,8 @@ public abstract class Engine implements Closeable {
      */
     public abstract boolean hasCompleteOperationHistory(String source, MapperService mapperService, long startingSeqNo) throws IOException;
 
+    public abstract long getMinRetainedSeqNo();
+
     public abstract TranslogStats getTranslogStats();
 
     /**

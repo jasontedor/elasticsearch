@@ -1,6 +1,7 @@
 package org.elasticsearch.action;
 
 import org.elasticsearch.action.support.ActionFilters;
+import org.elasticsearch.action.support.PlainActionFuture;
 import org.elasticsearch.action.support.single.shard.SingleShardRequest;
 import org.elasticsearch.action.support.single.shard.TransportSingleShardAction;
 import org.elasticsearch.cluster.ClusterState;
@@ -9,6 +10,8 @@ import org.elasticsearch.cluster.routing.ShardsIterator;
 import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
+import org.elasticsearch.common.lease.Releasable;
+import org.elasticsearch.common.util.concurrent.FutureUtils;
 import org.elasticsearch.index.IndexService;
 import org.elasticsearch.index.shard.IndexShard;
 import org.elasticsearch.index.shard.ShardId;
@@ -16,8 +19,10 @@ import org.elasticsearch.indices.IndicesService;
 import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.transport.TransportService;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 
 public class RetentionLeaseAction extends Action<RetentionLeaseAction.Response> {
 
@@ -44,11 +49,47 @@ public class RetentionLeaseAction extends Action<RetentionLeaseAction.Response> 
         }
 
         @Override
-        protected Response shardOperation(final Request request, final ShardId shardId) throws IOException {
+        protected ShardsIterator shards(ClusterState state, InternalRequest request) {
+            return state
+                    .routingTable()
+                    .shardRoutingTable(request.concreteIndex(), request.request().getShardId().id())
+                    .primaryShardIt();
+        }
+
+        @Override
+        protected Response shardOperation(final Request request, final ShardId shardId) {
             final IndexService indexService = indicesService.indexServiceSafe(request.getShardId().getIndex());
             final IndexShard indexShard = indexService.getShard(request.getShardId().id());
-            indexShard.acquireRetentionLockForPeerRecovery();
-            indexShard.addRetentionLease(request.getId(), request.getRetainingSequenceNumber(), request.getSource(), ActionListener.wrap(() -> {}));
+
+            final CompletableFuture<Releasable> permit = new CompletableFuture<>();
+            final ActionListener<Releasable> onAcquired = new ActionListener<Releasable>() {
+                @Override
+                public void onResponse(Releasable releasable) {
+                    if (permit.complete(releasable) == false) {
+                        releasable.close();
+                    }
+                }
+
+                @Override
+                public void onFailure(Exception e) {
+                    permit.completeExceptionally(e);
+                }
+            };
+            indexShard.acquirePrimaryOperationPermit(onAcquired, ThreadPool.Names.SAME, request);
+            try (Releasable ignore = FutureUtils.get(permit)) {
+                indexShard.addRetentionLease(request.getId(), request.getRetainingSequenceNumber(), request.getSource(), ActionListener.wrap(() -> {}));
+            } finally {
+                // just in case we got an exception (likely interrupted) while waiting for the get
+                permit.whenComplete((r, e) -> {
+                    if (r != null) {
+                        r.close();
+                    }
+                    if (e != null) {
+                        logger.trace("suppressing exception on completion (it was already bubbled up or the operation was aborted)", e);
+                    }
+                });
+            }
+
             return new Response();
         }
 
@@ -62,14 +103,11 @@ public class RetentionLeaseAction extends Action<RetentionLeaseAction.Response> 
             return false;
         }
 
-        @Override
-        protected ShardsIterator shards(ClusterState state, InternalRequest request) {
-            return null;
-        }
-
     }
 
     public static class Request extends SingleShardRequest<Request> {
+
+        public static long RETAIN_ALL = -1;
 
         private ShardId shardId;
 
@@ -101,7 +139,7 @@ public class RetentionLeaseAction extends Action<RetentionLeaseAction.Response> 
         public Request(final ShardId shardId, final String id, final long retainingSequenceNumber, final String source) {
             this.shardId = Objects.requireNonNull(shardId);
             this.id = Objects.requireNonNull(id);
-            if (retainingSequenceNumber < 0) {
+            if (retainingSequenceNumber < -1) {
                 throw new IllegalArgumentException(
                         "retention lease retaining sequence number [" + retainingSequenceNumber + "] out of range");
             }
@@ -119,7 +157,7 @@ public class RetentionLeaseAction extends Action<RetentionLeaseAction.Response> 
             super.readFrom(in);
             shardId = ShardId.readShardId(in);
             id = in.readString();
-            retainingSequenceNumber = in.readVLong();
+            retainingSequenceNumber = in.readZLong();
             source = in.readString();
         }
 
@@ -128,7 +166,7 @@ public class RetentionLeaseAction extends Action<RetentionLeaseAction.Response> 
             super.writeTo(out);
             shardId.writeTo(out);
             out.writeString(id);
-            out.writeVLong(retainingSequenceNumber);
+            out.writeZLong(retainingSequenceNumber);
             out.writeString(source);
         }
 
@@ -142,7 +180,6 @@ public class RetentionLeaseAction extends Action<RetentionLeaseAction.Response> 
     public Response newResponse() {
         return new Response();
     }
-
 
 
 }

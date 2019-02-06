@@ -302,6 +302,11 @@ public class ReadOnlyEngine extends Engine {
     }
 
     @Override
+    public long getMinRetainedSeqNo() {
+        return Long.MAX_VALUE;
+    }
+
+    @Override
     public TranslogStats getTranslogStats() {
         return translogStats;
     }

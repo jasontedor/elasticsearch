@@ -2562,7 +2562,7 @@ public class InternalEngine extends Engine {
      * Returns the minimum seqno that is retained in the Lucene index.
      * Operations whose seq# are at least this value should exist in the Lucene index.
      */
-    final long getMinRetainedSeqNo() {
+    public final long getMinRetainedSeqNo() {
         assert softDeleteEnabled : Thread.currentThread().getName();
         return softDeletesPolicy.getMinRetainedSeqNo();
     }
