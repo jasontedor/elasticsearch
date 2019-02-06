@@ -47,6 +47,7 @@ public class RetentionLeaseAction extends Action<RetentionLeaseAction.Response> 
         protected Response shardOperation(final Request request, final ShardId shardId) throws IOException {
             final IndexService indexService = indicesService.indexServiceSafe(request.getShardId().getIndex());
             final IndexShard indexShard = indexService.getShard(request.getShardId().id());
+            indexShard.acquireRetentionLockForPeerRecovery();
             indexShard.addRetentionLease(request.getId(), request.getRetainingSequenceNumber(), request.getSource(), ActionListener.wrap(() -> {}));
             return new Response();
         }
