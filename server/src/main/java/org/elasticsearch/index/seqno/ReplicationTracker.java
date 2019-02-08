@@ -21,6 +21,7 @@ package org.elasticsearch.index.seqno;
 
 import com.carrotsearch.hppc.ObjectLongHashMap;
 import com.carrotsearch.hppc.ObjectLongMap;
+import org.elasticsearch.ResourceAlreadyExistsException;
 import org.elasticsearch.Version;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.support.replication.ReplicationResponse;
@@ -237,7 +238,7 @@ public class ReplicationTracker extends AbstractIndexShardComponent implements L
         synchronized (this) {
             assert primaryMode;
             if (retentionLeases.contains(id)) {
-                throw new IllegalArgumentException("retention lease with ID [" + id + "] already exists");
+                throw new RetentionLeaseAlreadyExistsException(id);
             }
             retentionLease = new RetentionLease(id, retainingSequenceNumber, currentTimeMillisSupplier.getAsLong(), source);
             retentionLeases = new RetentionLeases(
