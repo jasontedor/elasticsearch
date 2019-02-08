@@ -8,6 +8,7 @@ import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
 import org.elasticsearch.cluster.routing.ShardsIterator;
 import org.elasticsearch.cluster.service.ClusterService;
+import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.lease.Releasable;
@@ -29,7 +30,7 @@ public class RetentionLeaseAction extends Action<RetentionLeaseAction.Response> 
     public static final RetentionLeaseAction INSTANCE = new RetentionLeaseAction();
     public static final String NAME = "indices:data/write/retention_lease";
 
-    protected RetentionLeaseAction() {
+    private RetentionLeaseAction() {
         super(NAME);
     }
 
@@ -37,7 +38,8 @@ public class RetentionLeaseAction extends Action<RetentionLeaseAction.Response> 
 
         private final IndicesService indicesService;
 
-        protected TransportAction(
+        @Inject
+        public TransportAction(
                 final ThreadPool threadPool,
                 final ClusterService clusterService,
                 final TransportService transportService,
@@ -99,7 +101,7 @@ public class RetentionLeaseAction extends Action<RetentionLeaseAction.Response> 
         }
 
         @Override
-        protected boolean resolveIndex(Request request) {
+        protected boolean resolveIndex(final Request request) {
             return false;
         }
 
@@ -137,7 +139,8 @@ public class RetentionLeaseAction extends Action<RetentionLeaseAction.Response> 
         }
 
         public Request(final ShardId shardId, final String id, final long retainingSequenceNumber, final String source) {
-            this.shardId = Objects.requireNonNull(shardId);
+            super(Objects.requireNonNull(shardId).getIndexName());
+            this.shardId = shardId;
             this.id = Objects.requireNonNull(id);
             if (retainingSequenceNumber < -1) {
                 throw new IllegalArgumentException(

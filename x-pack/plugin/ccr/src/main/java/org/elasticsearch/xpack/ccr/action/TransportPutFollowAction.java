@@ -172,7 +172,6 @@ public final class TransportPutFollowAction
     private void afterRestoreStarted(Client clientWithHeaders, PutFollowAction.Request request,
                                      ActionListener<PutFollowAction.Response> originalListener,
                                      RestoreService.RestoreCompletionResponse response) {
-        final RetentionLeaseAction.Request retentionLeaseRequest = new RetentionLeaseAction.Request(null, null, 0, "ccr");
         clientWithHeaders.execute(
                 RetentionLeaseAction.INSTANCE,
                 new RetentionLeaseAction.Request());

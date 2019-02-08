@@ -1944,25 +1944,7 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
         Objects.requireNonNull(listener);
         assert assertPrimaryMode();
         verifyNotClosed();
-        try (Closeable ignore = acquireRetentionLock()) {
-            final long minimumRetainingSequenceNumber = getMinRetainedSeqNo();
-            final long actualRetainingSequenceNumber;
-            if (retainingSequenceNumber == -1) {
-                actualRetainingSequenceNumber = minimumRetainingSequenceNumber;
-            } else {
-                if (retainingSequenceNumber < minimumRetainingSequenceNumber) {
-                    final String message = String.format(
-                            "retaining sequence number [%d] can not be satisfied on the primary shard, can only guarantee [%d]",
-                            retainingSequenceNumber,
-                            minimumRetainingSequenceNumber);
-                    throw new IllegalArgumentException(message);
-                }
-                actualRetainingSequenceNumber = retainingSequenceNumber;
-            }
-            return replicationTracker.addRetentionLease(id, actualRetainingSequenceNumber, source, listener);
-        } catch (final IOException e) {
-            throw new AssertionError(e);
-        }
+        return replicationTracker.addRetentionLease(id, retainingSequenceNumber, source, listener);
     }
 
     /**

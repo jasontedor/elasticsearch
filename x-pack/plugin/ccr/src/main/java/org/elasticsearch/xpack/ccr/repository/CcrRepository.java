@@ -10,6 +10,9 @@ import com.carrotsearch.hppc.cursors.IntObjectCursor;
 import com.carrotsearch.hppc.cursors.ObjectObjectCursor;
 import org.apache.lucene.index.IndexCommit;
 import org.elasticsearch.Version;
+import org.elasticsearch.action.ActionListener;
+import org.elasticsearch.action.RetentionLeaseAction;
+import org.elasticsearch.action.StepListener;
 import org.elasticsearch.action.admin.cluster.state.ClusterStateRequest;
 import org.elasticsearch.action.admin.cluster.state.ClusterStateResponse;
 import org.elasticsearch.action.admin.indices.mapping.put.PutMappingRequest;
@@ -33,6 +36,7 @@ import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.util.CombinedRateLimiter;
 import org.elasticsearch.index.Index;
 import org.elasticsearch.index.engine.EngineException;
+import org.elasticsearch.index.seqno.RetentionLease;
 import org.elasticsearch.index.shard.IndexShard;
 import org.elasticsearch.index.shard.IndexShardRecoveryException;
 import org.elasticsearch.index.shard.ShardId;
@@ -284,7 +288,13 @@ public class CcrRepository extends AbstractLifecycleComponent implements Reposit
         Index leaderIndex = new Index(shardId.getIndexName(), leaderUUID);
         ShardId leaderShardId = new ShardId(leaderIndex, shardId.getId());
 
-        Client remoteClient = client.getRemoteClusterClient(remoteClusterAlias);
+        final String retentionLeaseId = leaderUUID + "-" + shardId.getIndex().getUUID();
+
+        final Client remoteClient = client.getRemoteClusterClient(remoteClusterAlias);
+        RetentionLeaseAction.Response response = remoteClient
+                .execute(RetentionLeaseAction.INSTANCE, new RetentionLeaseAction.Request(leaderShardId, retentionLeaseId, 0, "ccr"))
+                .actionGet(ccrSettings.getRecoveryActionTimeout());
+
         // TODO: There should be some local timeout. And if the remote cluster returns an unknown session
         //  response, we should be able to retry by creating a new session.
         String name = metadata.name();
