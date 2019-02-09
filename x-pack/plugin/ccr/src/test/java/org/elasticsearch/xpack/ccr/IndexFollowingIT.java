@@ -104,7 +104,7 @@ import static org.hamcrest.Matchers.nullValue;
 public class IndexFollowingIT extends CcrIntegTestCase {
 
     public void testFollowIndex() throws Exception {
-        final int numberOfPrimaryShards = randomIntBetween(1, 1);
+        final int numberOfPrimaryShards = randomIntBetween(1, 3);
         int numberOfReplicas = between(0, 1);
         final String leaderIndexSettings = getIndexSettings(numberOfPrimaryShards, numberOfReplicas,
             singletonMap(IndexSettings.INDEX_SOFT_DELETES_SETTING.getKey(), "true"));
@@ -114,7 +114,7 @@ public class IndexFollowingIT extends CcrIntegTestCase {
         final int firstBatchNumDocs;
         // Sometimes we want to index a lot of documents to ensure that the recovery works with larger files
         if (rarely()) {
-            firstBatchNumDocs = randomIntBetween(1800, 2000);
+            firstBatchNumDocs = randomIntBetween(1800, 10000);
         } else {
             firstBatchNumDocs = randomIntBetween(10, 64);
         }
@@ -127,21 +127,22 @@ public class IndexFollowingIT extends CcrIntegTestCase {
             waitForDocs(firstBatchNumDocs, indexer);
             indexer.assertNoFailures();
 
+            logger.info("Executing put follow");
             boolean waitOnAll = randomBoolean();
 
             final PutFollowAction.Request followRequest;
             if (waitOnAll) {
-                followRequest = putFollow("index1", "follow", ActiveShardCount.ALL);
+                followRequest = putFollow("index1", "index2", ActiveShardCount.ALL);
             } else {
-                followRequest = putFollow("index1", "follow", ActiveShardCount.ONE);
+                followRequest = putFollow("index1", "index2", ActiveShardCount.ONE);
             }
             PutFollowAction.Response response = followerClient().execute(PutFollowAction.INSTANCE, followRequest).get();
             assertTrue(response.isFollowIndexCreated());
             assertTrue(response.isFollowIndexShardsAcked());
             assertTrue(response.isIndexFollowingStarted());
 
-            ClusterHealthRequest healthRequest = Requests.clusterHealthRequest("follow").waitForNoRelocatingShards(true);
-            ClusterIndexHealth indexHealth = followerClient().admin().cluster().health(healthRequest).get().getIndices().get("follow");
+            ClusterHealthRequest healthRequest = Requests.clusterHealthRequest("index2").waitForNoRelocatingShards(true);
+            ClusterIndexHealth indexHealth = followerClient().admin().cluster().health(healthRequest).get().getIndices().get("index2");
             for (ClusterShardHealth shardHealth : indexHealth.getShards().values()) {
                 if (waitOnAll) {
                     assertTrue(shardHealth.isPrimaryActive());
@@ -165,16 +166,18 @@ public class IndexFollowingIT extends CcrIntegTestCase {
 
             for (String docId : indexer.getIds()) {
                 assertBusy(() -> {
-                    final GetResponse getResponse = followerClient().prepareGet("follow", "_doc", docId).get();
+                    final GetResponse getResponse = followerClient().prepareGet("index2", "_doc", docId).get();
                     assertTrue("Doc with id [" + docId + "] is missing", getResponse.isExists());
                 });
             }
 
-            pauseFollow("follow");
-            followerClient().execute(ResumeFollowAction.INSTANCE, resumeFollow("follow")).get();
+            pauseFollow("index2");
+            followerClient().execute(ResumeFollowAction.INSTANCE, resumeFollow("index2")).get();
             final int secondBatchNumDocs = randomIntBetween(2, 64);
             logger.info("Indexing [{}] docs as second batch", secondBatchNumDocs);
             indexer.continueIndexing(secondBatchNumDocs);
+
+            waitForDocs(firstBatchNumDocs + secondBatchNumDocs, indexer);
 
             final Map<ShardId, Long> secondBatchNumDocsPerShard = new HashMap<>();
             final ShardStats[] secondBatchShardStats =
@@ -190,12 +193,13 @@ public class IndexFollowingIT extends CcrIntegTestCase {
 
             for (String docId : indexer.getIds()) {
                 assertBusy(() -> {
-                    final GetResponse getResponse = followerClient().prepareGet("follow", "_doc", docId).get();
+                    final GetResponse getResponse = followerClient().prepareGet("index2", "_doc", docId).get();
                     assertTrue("Doc with id [" + docId + "] is missing", getResponse.isExists());
                 });
             }
-            pauseFollow("follow");
-            assertMaxSeqNoOfUpdatesIsTransferred(resolveLeaderIndex("index1"), resolveFollowerIndex("follow"), numberOfPrimaryShards);
+
+            pauseFollow("index2");
+            assertMaxSeqNoOfUpdatesIsTransferred(resolveLeaderIndex("index1"), resolveFollowerIndex("index2"), numberOfPrimaryShards);
         }
     }
 
