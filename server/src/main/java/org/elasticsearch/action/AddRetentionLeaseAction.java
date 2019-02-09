@@ -1,7 +1,6 @@
 package org.elasticsearch.action;
 
 import org.elasticsearch.action.support.ActionFilters;
-import org.elasticsearch.action.support.PlainActionFuture;
 import org.elasticsearch.action.support.single.shard.SingleShardRequest;
 import org.elasticsearch.action.support.single.shard.TransportSingleShardAction;
 import org.elasticsearch.cluster.ClusterState;
@@ -20,17 +19,16 @@ import org.elasticsearch.indices.IndicesService;
 import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.transport.TransportService;
 
-import java.io.Closeable;
 import java.io.IOException;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 
-public class RetentionLeaseAction extends Action<RetentionLeaseAction.Response> {
+public class AddRetentionLeaseAction extends Action<AddRetentionLeaseAction.Response> {
 
-    public static final RetentionLeaseAction INSTANCE = new RetentionLeaseAction();
+    public static final AddRetentionLeaseAction INSTANCE = new AddRetentionLeaseAction();
     public static final String NAME = "indices:data/write/retention_lease";
 
-    private RetentionLeaseAction() {
+    private AddRetentionLeaseAction() {
         super(NAME);
     }
 
@@ -183,6 +181,5 @@ public class RetentionLeaseAction extends Action<RetentionLeaseAction.Response> 
     public Response newResponse() {
         return new Response();
     }
-
 
 }
