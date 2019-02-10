@@ -15,7 +15,7 @@ import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.ExceptionsHelper;
 import org.elasticsearch.Version;
 import org.elasticsearch.action.ActionListener;
-import org.elasticsearch.action.AddRetentionLeaseAction;
+import org.elasticsearch.action.RetentionLeaseActions;
 import org.elasticsearch.action.admin.cluster.state.ClusterStateRequest;
 import org.elasticsearch.action.admin.cluster.state.ClusterStateResponse;
 import org.elasticsearch.action.admin.indices.mapping.put.PutMappingRequest;
@@ -39,6 +39,8 @@ import org.elasticsearch.common.util.concurrent.AbstractRunnable;
 import org.elasticsearch.index.Index;
 import org.elasticsearch.index.engine.EngineException;
 import org.elasticsearch.index.seqno.LocalCheckpointTracker;
+import org.elasticsearch.index.seqno.RetentionLeaseAlreadyExistsException;
+import org.elasticsearch.index.seqno.RetentionLeaseNotFoundException;
 import org.elasticsearch.index.shard.IndexShard;
 import org.elasticsearch.index.shard.IndexShardRecoveryException;
 import org.elasticsearch.index.shard.ShardId;
@@ -58,6 +60,7 @@ import org.elasticsearch.snapshots.SnapshotId;
 import org.elasticsearch.snapshots.SnapshotInfo;
 import org.elasticsearch.snapshots.SnapshotShardFailure;
 import org.elasticsearch.snapshots.SnapshotState;
+import org.elasticsearch.threadpool.Scheduler;
 import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.xpack.ccr.Ccr;
 import org.elasticsearch.xpack.ccr.CcrLicenseChecker;
@@ -80,6 +83,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.LongConsumer;
@@ -304,19 +308,66 @@ public class CcrRepository extends AbstractLifecycleComponent implements Reposit
         final Client remoteClient = client.getRemoteClusterClient(remoteClusterAlias);
 
         final String retentionLeaseId = indexShard.shardId().getIndex().getUUID() + "-following-" + leaderUUID;
+        final RetentionLeaseActions.Request request =
+                new RetentionLeaseActions.Request(leaderShardId, retentionLeaseId, RetentionLeaseActions.Request.RETAIN_ALL, "ccr");
         logger.trace("requesting leader primary to add retention lease [" + retentionLeaseId + "]");
-        remoteClient
-                .execute(AddRetentionLeaseAction.INSTANCE, new AddRetentionLeaseAction.Request(leaderShardId, retentionLeaseId, 0, "ccr"))
-                .actionGet(ccrSettings.getRecoveryActionTimeout());
+        final Optional<RetentionLeaseAlreadyExistsException> maybeAddAlready = addRetentionLease(remoteClient, request);
+        if (maybeAddAlready.isPresent()) {
+            logger.trace("retention lease already exists, requesting a renewal", maybeAddAlready.get());
+            final Optional<RetentionLeaseNotFoundException> maybeRenewNotFound = renewRetentionLease(remoteClient, request);
+            if (maybeRenewNotFound.isPresent()) {
+                logger.trace("retention lease does not exist while attempting to renew, attempting a final add", maybeRenewNotFound.get());
+                final Optional<RetentionLeaseAlreadyExistsException> maybeFallbackAddAlready = addRetentionLease(remoteClient, request);
+                if (maybeFallbackAddAlready.isPresent()) {
+                    /*
+                     * At this point we tried to add the lease and the retention lease already existed. By the time we tried to renew the
+                     * lease, it expired or was removed. We tried to add the lease again and it already exists? Bail.
+                     */
+                    assert false : maybeFallbackAddAlready.get();
+                    throw maybeFallbackAddAlready.get();
+                }
+            }
+        }
+
+        // schedule renewals to run during the restore
+        final Scheduler.Cancellable renewable = threadPool.scheduleWithFixedDelay(
+                () -> renewRetentionLease(remoteClient, request),
+                TimeValue.timeValueMinutes(5),
+                Ccr.CCR_THREAD_POOL_NAME);
 
         // TODO: There should be some local timeout. And if the remote cluster returns an unknown session
         //  response, we should be able to retry by creating a new session.
         String name = metadata.name();
+
         try (RestoreSession restoreSession = openSession(name, remoteClient, leaderShardId, indexShard, recoveryState)) {
             restoreSession.restoreFiles();
             updateMappings(remoteClient, leaderIndex, restoreSession.mappingVersion, client, indexShard.routingEntry().index());
         } catch (Exception e) {
             throw new IndexShardRestoreFailedException(indexShard.shardId(), "failed to restore snapshot [" + snapshotId + "]", e);
+        } finally {
+            renewable.cancel();
+        }
+    }
+
+    private Optional<RetentionLeaseAlreadyExistsException> addRetentionLease(
+            final Client remoteClient,
+            final RetentionLeaseActions.Request request) {
+        try {
+            remoteClient.execute(RetentionLeaseActions.Add.INSTANCE, request).actionGet(ccrSettings.getRecoveryActionTimeout());
+            return Optional.empty();
+        } catch (final RetentionLeaseAlreadyExistsException e) {
+            return Optional.of(e);
+        }
+    }
+
+    private Optional<RetentionLeaseNotFoundException> renewRetentionLease(
+            final Client remoteClient,
+            final RetentionLeaseActions.Request request) {
+        try {
+            remoteClient.execute(RetentionLeaseActions.Renew.INSTANCE, request).actionGet(ccrSettings.getRecoveryActionTimeout());
+            return Optional.empty();
+        } catch (final RetentionLeaseNotFoundException e) {
+            return Optional.of(e);
         }
     }
 

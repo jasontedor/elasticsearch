@@ -19,18 +19,18 @@
 
 package org.elasticsearch.index.seqno;
 
-import org.elasticsearch.ResourceAlreadyExistsException;
+import org.elasticsearch.ResourceNotFoundException;
 import org.elasticsearch.common.io.stream.StreamInput;
 
 import java.io.IOException;
 
-public class RetentionLeaseAlreadyExistsException extends ResourceAlreadyExistsException {
+public class RetentionLeaseNotFoundException extends ResourceNotFoundException {
 
-    RetentionLeaseAlreadyExistsException(final String id) {
-        super("retention lease with ID [" + id + "] already exists");
+    RetentionLeaseNotFoundException(final String id) {
+        super("retention lease with ID [" + id + "] not found");
     }
 
-    public RetentionLeaseAlreadyExistsException(StreamInput in) throws IOException {
+    public RetentionLeaseNotFoundException(final StreamInput in) throws IOException {
         super(in);
     }
 

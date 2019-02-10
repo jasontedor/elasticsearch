@@ -11,7 +11,6 @@ import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.message.ParameterizedMessage;
 import org.elasticsearch.Version;
 import org.elasticsearch.action.ActionListener;
-import org.elasticsearch.action.AddRetentionLeaseAction;
 import org.elasticsearch.action.admin.cluster.snapshots.restore.RestoreClusterStateListener;
 import org.elasticsearch.action.admin.cluster.snapshots.restore.RestoreSnapshotRequest;
 import org.elasticsearch.action.admin.cluster.snapshots.restore.RestoreSnapshotResponse;
@@ -171,11 +170,6 @@ public final class TransportPutFollowAction
     private void afterRestoreStarted(Client clientWithHeaders, PutFollowAction.Request request,
                                      ActionListener<PutFollowAction.Response> originalListener,
                                      RestoreService.RestoreCompletionResponse response) {
-        clientWithHeaders.execute(
-                AddRetentionLeaseAction.INSTANCE,
-                new AddRetentionLeaseAction.Request());
-
-
         final ActionListener<PutFollowAction.Response> listener;
         if (ActiveShardCount.NONE.equals(request.waitForActiveShards())) {
             originalListener.onResponse(new PutFollowAction.Response(true, false, false));

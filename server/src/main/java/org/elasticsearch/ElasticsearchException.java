@@ -1017,6 +1017,11 @@ public class ElasticsearchException extends RuntimeException implements ToXConte
                 org.elasticsearch.index.seqno.RetentionLeaseAlreadyExistsException.class,
                 org.elasticsearch.index.seqno.RetentionLeaseAlreadyExistsException::new,
                 153,
+                Version.V_8_0_0),
+        RETENTION_LEASE_NOT_FOUND_EXCEPTION(
+                org.elasticsearch.index.seqno.RetentionLeaseNotFoundException.class,
+                org.elasticsearch.index.seqno.RetentionLeaseNotFoundException::new,
+                154,
                 Version.V_8_0_0);
 
         final Class<? extends ElasticsearchException> exceptionClass;

@@ -23,28 +23,22 @@ import java.io.IOException;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 
-public class AddRetentionLeaseAction extends Action<AddRetentionLeaseAction.Response> {
+public class RetentionLeaseActions {
 
-    public static final AddRetentionLeaseAction INSTANCE = new AddRetentionLeaseAction();
-    public static final String NAME = "indices:data/write/retention_lease";
-
-    private AddRetentionLeaseAction() {
-        super(NAME);
-    }
-
-    public static class TransportAction extends TransportSingleShardAction<Request, Response> {
+    static abstract class TransportRetentionLeaseAction extends TransportSingleShardAction<Request, Response> {
 
         private final IndicesService indicesService;
 
         @Inject
-        public TransportAction(
+        public TransportRetentionLeaseAction(
+                final String name,
                 final ThreadPool threadPool,
                 final ClusterService clusterService,
                 final TransportService transportService,
                 final ActionFilters actionFilters,
                 final IndexNameExpressionResolver indexNameExpressionResolver,
                 final IndicesService indicesService) {
-            super(NAME, threadPool, clusterService, transportService, actionFilters, indexNameExpressionResolver, Request::new, ThreadPool.Names.MANAGEMENT);
+            super(name, threadPool, clusterService, transportService, actionFilters, indexNameExpressionResolver, Request::new, ThreadPool.Names.MANAGEMENT);
             this.indicesService = Objects.requireNonNull(indicesService);
         }
 
@@ -77,7 +71,7 @@ public class AddRetentionLeaseAction extends Action<AddRetentionLeaseAction.Resp
             };
             indexShard.acquirePrimaryOperationPermit(onAcquired, ThreadPool.Names.SAME, request);
             try (Releasable ignore = FutureUtils.get(permit)) {
-                indexShard.addRetentionLease(request.getId(), request.getRetainingSequenceNumber(), request.getSource(), ActionListener.wrap(() -> {}));
+                doRetentionLeaseAction(indexShard, request);
             } finally {
                 // just in case we got an exception (likely interrupted) while waiting for the get
                 permit.whenComplete((r, e) -> {
@@ -93,6 +87,8 @@ public class AddRetentionLeaseAction extends Action<AddRetentionLeaseAction.Resp
             return new Response();
         }
 
+        abstract void doRetentionLeaseAction(IndexShard indexShard, Request request);
+
         @Override
         protected Response newResponse() {
             return new Response();
@@ -101,6 +97,77 @@ public class AddRetentionLeaseAction extends Action<AddRetentionLeaseAction.Resp
         @Override
         protected boolean resolveIndex(final Request request) {
             return false;
+        }
+
+    }
+
+    public static class Add extends Action<Response> {
+
+        public static final Add INSTANCE = new Add();
+        public static final String NAME = "indices:data/write/add_retention_lease";
+
+        private Add() {
+            super(NAME);
+        }
+
+        public static class TransportAction extends TransportRetentionLeaseAction {
+
+            @Inject
+            public TransportAction(
+                    final ThreadPool threadPool,
+                    final ClusterService clusterService,
+                    final TransportService transportService,
+                    final ActionFilters actionFilters,
+                    final IndexNameExpressionResolver indexNameExpressionResolver,
+                    final IndicesService indicesService) {
+                super(NAME, threadPool, clusterService, transportService, actionFilters, indexNameExpressionResolver, indicesService);
+            }
+
+            @Override
+            void doRetentionLeaseAction(final IndexShard indexShard, final Request request) {
+                indexShard.addRetentionLease(request.getId(), request.getRetainingSequenceNumber(), request.getSource(), ActionListener.wrap(() -> {}));
+            }
+        }
+
+        @Override
+        public Response newResponse() {
+            return new Response();
+        }
+
+    }
+
+    public static class Renew extends Action<Response> {
+
+        public static final Renew INSTANCE = new Renew();
+        public static final String NAME = "indices:data/write/renew_retention_lease";
+
+        private Renew() {
+            super(NAME);
+        }
+
+        public static class TransportAction extends TransportRetentionLeaseAction {
+
+            @Inject
+            public TransportAction(
+                    final ThreadPool threadPool,
+                    final ClusterService clusterService,
+                    final TransportService transportService,
+                    final ActionFilters actionFilters,
+                    final IndexNameExpressionResolver indexNameExpressionResolver,
+                    final IndicesService indicesService) {
+                super(NAME, threadPool, clusterService, transportService, actionFilters, indexNameExpressionResolver, indicesService);
+            }
+
+
+            @Override
+            void doRetentionLeaseAction(final IndexShard indexShard, final Request request) {
+                indexShard.renewRetentionLease(request.getId(), request.getRetainingSequenceNumber(), request.getSource());
+            }
+        }
+
+        @Override
+        public Response newResponse() {
+            return new Response();
         }
 
     }
@@ -175,11 +242,6 @@ public class AddRetentionLeaseAction extends Action<AddRetentionLeaseAction.Resp
 
     public static class Response extends ActionResponse {
 
-    }
-
-    @Override
-    public Response newResponse() {
-        return new Response();
     }
 
 }

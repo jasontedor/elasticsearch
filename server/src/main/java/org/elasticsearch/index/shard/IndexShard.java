@@ -1944,7 +1944,12 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
         Objects.requireNonNull(listener);
         assert assertPrimaryMode();
         verifyNotClosed();
-        return replicationTracker.addRetentionLease(id, retainingSequenceNumber, source, listener);
+        try (Closeable ignore = acquireRetentionLock()) {
+            final long actualRetainingSequenceNumber = retainingSequenceNumber == -1 ? getMinRetainedSeqNo() : retainingSequenceNumber;
+            return replicationTracker.addRetentionLease(id, actualRetainingSequenceNumber, source, listener);
+        } catch (final IOException e) {
+            throw new AssertionError(e);
+        }
     }
 
     /**
@@ -1959,7 +1964,12 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
     public RetentionLease renewRetentionLease(final String id, final long retainingSequenceNumber, final String source) {
         assert assertPrimaryMode();
         verifyNotClosed();
-        return replicationTracker.renewRetentionLease(id, retainingSequenceNumber, source);
+        try (Closeable ignore = acquireRetentionLock()) {
+            final long actualRetainingSequenceNumber = retainingSequenceNumber == -1 ? getMinRetainedSeqNo() : retainingSequenceNumber;
+            return replicationTracker.renewRetentionLease(id, actualRetainingSequenceNumber, source);
+        } catch (final IOException e) {
+            throw new AssertionError(e);
+        }
     }
 
     /**

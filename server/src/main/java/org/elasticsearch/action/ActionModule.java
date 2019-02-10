@@ -521,7 +521,8 @@ public class ActionModule extends AbstractModule {
         actions.register(DeletePipelineAction.INSTANCE, DeletePipelineTransportAction.class);
         actions.register(SimulatePipelineAction.INSTANCE, SimulatePipelineTransportAction.class);
 
-        actions.register(AddRetentionLeaseAction.INSTANCE, AddRetentionLeaseAction.TransportAction.class);
+        actions.register(RetentionLeaseActions.Add.INSTANCE, RetentionLeaseActions.Add.TransportAction.class);
+        actions.register(RetentionLeaseActions.Renew.INSTANCE, RetentionLeaseActions.Renew.TransportAction.class);
 
         actionPlugins.stream().flatMap(p -> p.getActions().stream()).forEach(actions::register);
 
