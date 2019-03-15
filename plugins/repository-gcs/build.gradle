@@ -25,7 +25,7 @@ esplugin {
 dependencies {
   compile 'com.google.cloud:google-cloud-storage:1.59.0'
   compile 'com.google.cloud:google-cloud-core:1.59.0'
-  compile 'com.google.guava:guava:20.0'
+  compile 'com.google.guava:guava:26.0-jre'
   compile "joda-time:joda-time:${versions.joda}"
   compile 'com.google.http-client:google-http-client:1.24.1'
   compile "org.apache.httpcomponents:httpclient:${versions.httpclient}"
