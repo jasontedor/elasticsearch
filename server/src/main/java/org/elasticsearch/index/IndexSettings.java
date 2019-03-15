@@ -270,6 +270,15 @@ public final class IndexSettings {
                     Property.IndexScope);
 
     /**
+     * Controls how long segments with soft-deleted documents that are ready for merge can be delayed. This setting does not affect force
+     * merges, it affects only background merges (on refresh or flush). Computing a merge specification with soft-deletes is a bit more
+     * expensive than with hard-deletes; thus caching some values deciding merge specs might reduce load that each refresh has to execute.
+     */
+    public static final Setting<TimeValue> INDEX_SOFT_DELETES_RECLAIM_DELAY_SETTING =
+        Setting.timeSetting("index.soft_deletes.reclaim.delay", TimeValue.timeValueMinutes(1), TimeValue.timeValueMillis(-1),
+            Property.IndexScope);
+
+    /**
      * The maximum number of refresh listeners allows on this shard.
      */
     public static final Setting<Integer> MAX_REFRESH_LISTENERS_PER_SHARD = Setting.intSetting("index.max_refresh_listeners",
@@ -345,6 +354,7 @@ public final class IndexSettings {
         this.retentionLeaseMillis = retentionLease.millis();
     }
 
+    private final TimeValue softDeleteReclaimDelay;
     private volatile boolean warmerEnabled;
     private volatile int maxResultWindow;
     private volatile int maxInnerResultWindow;
@@ -461,6 +471,7 @@ public final class IndexSettings {
         softDeleteEnabled = version.onOrAfter(Version.V_6_5_0) && scopedSettings.get(INDEX_SOFT_DELETES_SETTING);
         softDeleteRetentionOperations = scopedSettings.get(INDEX_SOFT_DELETES_RETENTION_OPERATIONS_SETTING);
         retentionLeaseMillis = scopedSettings.get(INDEX_SOFT_DELETES_RETENTION_LEASE_PERIOD_SETTING).millis();
+        softDeleteReclaimDelay = scopedSettings.get(INDEX_SOFT_DELETES_RECLAIM_DELAY_SETTING);
         warmerEnabled = scopedSettings.get(INDEX_WARMER_ENABLED_SETTING);
         maxResultWindow = scopedSettings.get(MAX_RESULT_WINDOW_SETTING);
         maxInnerResultWindow = scopedSettings.get(MAX_INNER_RESULT_WINDOW_SETTING);
@@ -944,6 +955,10 @@ public final class IndexSettings {
      */
     public long getSoftDeleteRetentionOperations() {
         return this.softDeleteRetentionOperations;
+    }
+
+    public TimeValue getSoftDeleteReclaimDelay() {
+        return softDeleteReclaimDelay;
     }
 
     /**
