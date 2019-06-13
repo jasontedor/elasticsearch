@@ -46,6 +46,10 @@ import org.elasticsearch.action.admin.cluster.node.tasks.get.GetTaskResponse;
 import org.elasticsearch.action.admin.cluster.node.tasks.list.ListTasksRequest;
 import org.elasticsearch.action.admin.cluster.node.tasks.list.ListTasksRequestBuilder;
 import org.elasticsearch.action.admin.cluster.node.tasks.list.ListTasksResponse;
+import org.elasticsearch.action.admin.cluster.node.threads.NodesThreadsAction;
+import org.elasticsearch.action.admin.cluster.node.threads.NodesThreadsRequest;
+import org.elasticsearch.action.admin.cluster.node.threads.NodesThreadsRequestBuilder;
+import org.elasticsearch.action.admin.cluster.node.threads.NodesThreadsResponse;
 import org.elasticsearch.action.admin.cluster.node.usage.NodesUsageRequest;
 import org.elasticsearch.action.admin.cluster.node.usage.NodesUsageRequestBuilder;
 import org.elasticsearch.action.admin.cluster.node.usage.NodesUsageResponse;
@@ -313,6 +317,12 @@ public interface ClusterAdminClient extends ElasticsearchClient {
      * for the node ids provided. Note: Use {@code *} to fetch samples for all nodes
      */
     NodesHotThreadsRequestBuilder prepareNodesHotThreads(String... nodesIds);
+
+    ActionFuture<NodesThreadsResponse> nodesThreads(NodesThreadsRequest request);
+
+    void nodesThreads(NodesThreadsRequest request, ActionListener<NodesThreadsResponse> listener);
+
+    NodesThreadsRequestBuilder prepareNodesThreads(String... nodesIds);
 
     /**
      * List tasks

@@ -60,6 +60,10 @@ import org.elasticsearch.action.admin.cluster.node.tasks.list.ListTasksAction;
 import org.elasticsearch.action.admin.cluster.node.tasks.list.ListTasksRequest;
 import org.elasticsearch.action.admin.cluster.node.tasks.list.ListTasksRequestBuilder;
 import org.elasticsearch.action.admin.cluster.node.tasks.list.ListTasksResponse;
+import org.elasticsearch.action.admin.cluster.node.threads.NodesThreadsAction;
+import org.elasticsearch.action.admin.cluster.node.threads.NodesThreadsRequest;
+import org.elasticsearch.action.admin.cluster.node.threads.NodesThreadsRequestBuilder;
+import org.elasticsearch.action.admin.cluster.node.threads.NodesThreadsResponse;
 import org.elasticsearch.action.admin.cluster.node.usage.NodesUsageAction;
 import org.elasticsearch.action.admin.cluster.node.usage.NodesUsageRequest;
 import org.elasticsearch.action.admin.cluster.node.usage.NodesUsageRequestBuilder;
@@ -821,6 +825,21 @@ public abstract class AbstractClient implements Client {
         @Override
         public NodesHotThreadsRequestBuilder prepareNodesHotThreads(String... nodesIds) {
             return new NodesHotThreadsRequestBuilder(this, NodesHotThreadsAction.INSTANCE).setNodesIds(nodesIds);
+        }
+
+        @Override
+        public ActionFuture<NodesThreadsResponse> nodesThreads(final NodesThreadsRequest request) {
+            return execute(NodesThreadsAction.INSTANCE, request);
+        }
+
+        @Override
+        public void nodesThreads(final NodesThreadsRequest request, final ActionListener<NodesThreadsResponse> listener) {
+            execute(NodesThreadsAction.INSTANCE, request, listener);
+        }
+
+        @Override
+        public NodesThreadsRequestBuilder prepareNodesThreads(final String... nodesIds) {
+            return new NodesThreadsRequestBuilder(this, NodesThreadsAction.INSTANCE).setNodesIds(nodesIds);
         }
 
         @Override
