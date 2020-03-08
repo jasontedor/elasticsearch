@@ -6,6 +6,8 @@
 
 package org.elasticsearch.xpack.core.ccr.action;
 
+import org.elasticsearch.ElasticsearchException;
+import org.elasticsearch.ExceptionsHelper;
 import org.elasticsearch.action.ActionRequestValidationException;
 import org.elasticsearch.action.ActionType;
 import org.elasticsearch.action.IndicesRequest;
@@ -14,18 +16,19 @@ import org.elasticsearch.action.support.master.AcknowledgedRequest;
 import org.elasticsearch.action.support.master.AcknowledgedResponse;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
+import org.elasticsearch.common.xcontent.XContentBuilder;
 
 import java.io.IOException;
 
 import static org.elasticsearch.action.ValidateActions.addValidationError;
 
-public class UnfollowAction extends ActionType<AcknowledgedResponse> {
+public class UnfollowAction extends ActionType<UnfollowAction.Response> {
 
     public static final UnfollowAction INSTANCE = new UnfollowAction();
     public static final String NAME = "indices:admin/xpack/ccr/unfollow";
 
     private UnfollowAction() {
-        super(NAME, AcknowledgedResponse::new);
+        super(NAME, Response::new);
     }
 
     public static class Request extends AcknowledgedRequest<Request> implements IndicesRequest {
@@ -69,6 +72,40 @@ public class UnfollowAction extends ActionType<AcknowledgedResponse> {
             super.writeTo(out);
             out.writeString(followerIndex);
         }
+    }
+
+    public static class Response extends AcknowledgedResponse {
+
+        private final ElasticsearchException exception;
+
+        public Response(final boolean acknowledged) {
+            this(acknowledged, null);
+        }
+
+        public Response(final boolean acknowledged, final ElasticsearchException exception) {
+            super(acknowledged);
+            this.exception = exception;
+        }
+
+        public Response(final StreamInput in) throws IOException {
+            super(in);
+            exception = in.readException();
+        }
+
+        @Override
+        public void writeTo(final StreamOutput out) throws IOException {
+            super.writeTo(out);
+            out.writeException(exception);
+        }
+
+        @Override
+        protected void addCustomFields(final XContentBuilder builder, final Params params) throws IOException {
+            super.addCustomFields(builder, params);
+            if (exception != null) {
+                ElasticsearchException.generateFailureXContent(builder, params, exception, true);
+            }
+        }
+
     }
 
 }

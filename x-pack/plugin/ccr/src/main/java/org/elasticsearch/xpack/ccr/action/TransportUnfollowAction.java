@@ -49,7 +49,7 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.Objects;
 
-public class TransportUnfollowAction extends TransportMasterNodeAction<UnfollowAction.Request, AcknowledgedResponse> {
+public class TransportUnfollowAction extends TransportMasterNodeAction<UnfollowAction.Request, UnfollowAction.Response> {
 
     private static final Logger logger = LogManager.getLogger(TransportUnfollowAction.class);
 
@@ -80,15 +80,15 @@ public class TransportUnfollowAction extends TransportMasterNodeAction<UnfollowA
     }
 
     @Override
-    protected AcknowledgedResponse read(StreamInput in) throws IOException {
-        return new AcknowledgedResponse(in);
+    protected UnfollowAction.Response read(StreamInput in) throws IOException {
+        return new UnfollowAction.Response(in);
     }
 
     @Override
     protected void masterOperation(
         Task task, final UnfollowAction.Request request,
         final ClusterState state,
-        final ActionListener<AcknowledgedResponse> listener) {
+        final ActionListener<UnfollowAction.Response> listener) {
         clusterService.submitStateUpdateTask("unfollow_action", new ClusterStateUpdateTask() {
 
             @Override
@@ -124,22 +124,23 @@ public class TransportUnfollowAction extends TransportMasterNodeAction<UnfollowA
                             @Override
                             public void onResponse(final Collection<RetentionLeaseActions.Response> responses) {
                                 logger.trace(
-                                        "[{}] removed retention lease [{}] on all leader primary shards",
+                                        "{} removed retention lease [{}] on all leader primary shards",
                                         indexMetaData.getIndex(),
                                         retentionLeaseId);
-                                listener.onResponse(new AcknowledgedResponse(true));
+                                listener.onResponse(new UnfollowAction.Response(true));
                             }
 
                             @Override
                             public void onFailure(final Exception e) {
-                                logger.warn(new ParameterizedMessage(
-                                        "[{}] failure while removing retention lease [{}] on leader primary shards",
-                                        indexMetaData.getIndex(),
-                                        retentionLeaseId),
-                                        e);
-                                final ElasticsearchException wrapper = new ElasticsearchException(e);
-                                wrapper.addMetadata("es.failed_to_remove_retention_leases", retentionLeaseId);
-                                listener.onFailure(wrapper);
+                                final String message = String.format(
+                                    "%s failure while removing retention lease [%s] on [%d] leader primary shards",
+                                    indexMetaData.getIndex(),
+                                    retentionLeaseId,
+                                    1 + e.getSuppressed().length // subsequent failures are suppressed into the first failure
+                                );
+                                logger.warn(message, e);
+                                final ElasticsearchException wrapper = new ElasticsearchException(message, e);
+                                listener.onResponse(new UnfollowAction.Response(true, wrapper));
                             }
 
                         },
@@ -197,13 +198,16 @@ public class TransportUnfollowAction extends TransportMasterNodeAction<UnfollowA
                             e);
                     listener.onResponse(new RetentionLeaseActions.Response());
                 } else {
-                    logger.warn(new ParameterizedMessage(
-                            "{} failed to remove retention lease [{}] on {} while unfollowing",
-                            followerShardId,
-                            retentionLeaseId,
-                            leaderShardId),
-                            e);
-                    listener.onFailure(e);
+                    final String message = String.format(
+                        "%s failed to remove retention lease [%s] on %s while unfollowing",
+                        followerShardId,
+                        retentionLeaseId,
+                        leaderShardId
+                    );
+                    logger.warn(message, e);
+                    final ElasticsearchException wrapper = new ElasticsearchException(message, e);
+                    wrapper.addMetadata("es.failed_to_remove_retention_lease", retentionLeaseId);
+                    listener.onFailure(wrapper);
                 }
             }
 
