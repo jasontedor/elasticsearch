@@ -18,12 +18,21 @@ import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.tasks.Task;
 import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.transport.TransportService;
+import org.elasticsearch.xpack.autoscaling.AutoscalingDecision;
+import org.elasticsearch.xpack.autoscaling.AutoscalingMetadata;
+import org.elasticsearch.xpack.autoscaling.AutoscalingService;
 
 import java.io.IOException;
+import java.util.Map;
+import java.util.Objects;
+import java.util.TreeMap;
+import java.util.stream.Collectors;
 
 public class TransportGetAutoscalingDecisionAction extends TransportMasterNodeAction<
     GetAutoscalingDecisionAction.Request,
     GetAutoscalingDecisionAction.Response> {
+
+    private final AutoscalingService autoscalingService;
 
     @Inject
     public TransportGetAutoscalingDecisionAction(
@@ -31,7 +40,8 @@ public class TransportGetAutoscalingDecisionAction extends TransportMasterNodeAc
         final ClusterService clusterService,
         final ThreadPool threadPool,
         final ActionFilters actionFilters,
-        final IndexNameExpressionResolver indexNameExpressionResolver
+        final IndexNameExpressionResolver indexNameExpressionResolver,
+        final AutoscalingService autoscalingService
     ) {
         super(
             GetAutoscalingDecisionAction.NAME,
@@ -42,6 +52,7 @@ public class TransportGetAutoscalingDecisionAction extends TransportMasterNodeAc
             GetAutoscalingDecisionAction.Request::new,
             indexNameExpressionResolver
         );
+        this.autoscalingService = Objects.requireNonNull(autoscalingService);
     }
 
     @Override
@@ -61,7 +72,17 @@ public class TransportGetAutoscalingDecisionAction extends TransportMasterNodeAc
         final ClusterState state,
         final ActionListener<GetAutoscalingDecisionAction.Response> listener
     ) {
-        listener.onResponse(new GetAutoscalingDecisionAction.Response());
+        final AutoscalingMetadata metadata;
+        if (state.metaData().custom(AutoscalingMetadata.NAME) != null) {
+            metadata = state.metaData().custom(AutoscalingMetadata.NAME);
+        } else {
+            metadata = AutoscalingMetadata.EMPTY;
+        }
+        final Map<String, AutoscalingDecision> decisions = metadata.policies()
+            .entrySet()
+            .stream()
+            .collect(Collectors.toMap(Map.Entry::getKey, e -> autoscalingService.scale(e.getValue().policy().deciders())));
+        listener.onResponse(new GetAutoscalingDecisionAction.Response(new TreeMap<>(decisions)));
     }
 
     @Override

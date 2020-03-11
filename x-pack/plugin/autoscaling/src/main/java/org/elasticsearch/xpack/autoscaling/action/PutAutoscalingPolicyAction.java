@@ -10,39 +10,63 @@ import org.elasticsearch.action.ActionRequestValidationException;
 import org.elasticsearch.action.ActionResponse;
 import org.elasticsearch.action.ActionType;
 import org.elasticsearch.action.support.master.AcknowledgedRequest;
+import org.elasticsearch.common.ParseField;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
+import org.elasticsearch.common.xcontent.ConstructingObjectParser;
 import org.elasticsearch.common.xcontent.ToXContentObject;
 import org.elasticsearch.common.xcontent.XContentBuilder;
-import org.elasticsearch.xpack.autoscaling.AutoscalingDecision;
+import org.elasticsearch.common.xcontent.XContentParser;
+import org.elasticsearch.xpack.autoscaling.AutoscalingPolicy;
 
 import java.io.IOException;
-import java.util.Map;
-import java.util.SortedMap;
-import java.util.TreeMap;
 
-public class GetAutoscalingDecisionAction extends ActionType<GetAutoscalingDecisionAction.Response> {
+public class PutAutoscalingPolicyAction extends ActionType<PutAutoscalingPolicyAction.Response> {
 
-    public static final GetAutoscalingDecisionAction INSTANCE = new GetAutoscalingDecisionAction();
-    public static final String NAME = "cluster:admin/autoscaling/get_autoscaling_decision";
+    public static final PutAutoscalingPolicyAction INSTANCE = new PutAutoscalingPolicyAction();
+    public static final String NAME = "cluster:admin/autoscaling/put_autoscaling_policy";
 
-    private GetAutoscalingDecisionAction() {
+    private PutAutoscalingPolicyAction() {
         super(NAME, Response::new);
     }
 
-    public static class Request extends AcknowledgedRequest<GetAutoscalingDecisionAction.Request> implements ToXContentObject {
+    public static class Request extends AcknowledgedRequest<PutAutoscalingPolicyAction.Request> implements ToXContentObject {
 
-        public Request() {
+        static final ParseField POLICY_FIELD = new ParseField("policy");
 
+        @SuppressWarnings("unchecked")
+        private static final ConstructingObjectParser<Request, String> PARSER = new ConstructingObjectParser<>(
+            "put_autoscaling_policy_request",
+            a -> new Request((AutoscalingPolicy) a[0])
+        );
+
+        static {
+            PARSER.declareObject(ConstructingObjectParser.constructorArg(), AutoscalingPolicy::parse, POLICY_FIELD);
+        }
+
+        public static Request parse(final String name, final XContentParser parser) {
+            return PARSER.apply(parser, name);
+        }
+
+        private final AutoscalingPolicy policy;
+
+        public AutoscalingPolicy policy() {
+            return policy;
+        }
+
+        public Request(final AutoscalingPolicy policy) {
+            this.policy = policy;
         }
 
         public Request(final StreamInput in) throws IOException {
             super(in);
+            policy = new AutoscalingPolicy(in);
         }
 
         @Override
         public void writeTo(final StreamOutput out) throws IOException {
             super.writeTo(out);
+            policy.writeTo(out);
         }
 
         @Override
@@ -54,7 +78,7 @@ public class GetAutoscalingDecisionAction extends ActionType<GetAutoscalingDecis
         public XContentBuilder toXContent(final XContentBuilder builder, final Params params) throws IOException {
             builder.startObject();
             {
-
+                builder.field(POLICY_FIELD.getPreferredName(), policy);
             }
             builder.endObject();
             return builder;
@@ -64,37 +88,24 @@ public class GetAutoscalingDecisionAction extends ActionType<GetAutoscalingDecis
 
     public static class Response extends ActionResponse implements ToXContentObject {
 
-        private final SortedMap<String, AutoscalingDecision> decisions;
+        public Response() {
 
-        public Response(final SortedMap<String, AutoscalingDecision> decisions) {
-            this.decisions = decisions;
         }
 
         public Response(final StreamInput in) throws IOException {
             super(in);
-            this.decisions = new TreeMap<>(in.readMap(StreamInput::readString, AutoscalingDecision::readFrom));
         }
 
         @Override
-        public void writeTo(final StreamOutput out) throws IOException {
-            out.writeMap(decisions, StreamOutput::writeString, (o, decision) -> decision.writeTo(o));
+        public void writeTo(final StreamOutput out) {
+
         }
 
         @Override
         public XContentBuilder toXContent(final XContentBuilder builder, final Params params) throws IOException {
             builder.startObject();
             {
-                builder.startArray("decisions");
-                {
-                    for (final Map.Entry<String, AutoscalingDecision> decision : decisions.entrySet()) {
-                        builder.startObject();
-                        {
-                            builder.field(decision.getKey(), decision.getValue());
-                        }
-                        builder.endObject();
-                    }
-                }
-                builder.endArray();
+
             }
             builder.endObject();
             return builder;
