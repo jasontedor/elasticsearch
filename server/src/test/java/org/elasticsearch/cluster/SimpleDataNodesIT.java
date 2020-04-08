@@ -29,7 +29,7 @@ import org.elasticsearch.cluster.metadata.IndexMetadata;
 import org.elasticsearch.common.Priority;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.xcontent.XContentType;
-import org.elasticsearch.node.Node;
+import org.elasticsearch.node.NodeRoleSettings;
 import org.elasticsearch.test.ESIntegTestCase;
 import org.elasticsearch.test.ESIntegTestCase.ClusterScope;
 import org.elasticsearch.test.ESIntegTestCase.Scope;
@@ -44,7 +44,7 @@ public class SimpleDataNodesIT extends ESIntegTestCase {
     private static final String SOURCE = "{\"type1\":{\"id\":\"1\",\"name\":\"test\"}}";
 
     public void testIndexingBeforeAndAfterDataNodesStart() {
-        internalCluster().startNode(Settings.builder().put(Node.NODE_DATA_SETTING.getKey(), false).build());
+        internalCluster().startNode(Settings.builder().put(NodeRoleSettings.NODE_EXCLUDE_ROLES_SETTING.getKey(), "data").build());
         client().admin().indices().create(createIndexRequest("test").waitForActiveShards(ActiveShardCount.NONE)).actionGet();
         try {
             client().index(Requests.indexRequest("test").id("1").source(SOURCE, XContentType.JSON)
@@ -54,7 +54,7 @@ public class SimpleDataNodesIT extends ESIntegTestCase {
             // all is well
         }
 
-        internalCluster().startNode(Settings.builder().put(Node.NODE_DATA_SETTING.getKey(), false).build());
+        internalCluster().startNode(Settings.builder().put(NodeRoleSettings.NODE_EXCLUDE_ROLES_SETTING.getKey(), "data").build());
         assertThat(client().admin().cluster().prepareHealth().setWaitForEvents(Priority.LANGUID).setWaitForNodes("2")
             .setLocal(true).execute().actionGet().isTimedOut(), equalTo(false));
 
@@ -68,7 +68,7 @@ public class SimpleDataNodesIT extends ESIntegTestCase {
         }
 
         // now, start a node data, and see that it gets with shards
-        internalCluster().startNode(Settings.builder().put(Node.NODE_DATA_SETTING.getKey(), true).build());
+        internalCluster().startNode(Settings.builder().put(NodeRoleSettings.NODE_INCLUDE_ROLES_SETTING.getKey(), "data").build());
         assertThat(client().admin().cluster().prepareHealth().setWaitForEvents(Priority.LANGUID).setWaitForNodes("3")
             .setLocal(true).execute().actionGet().isTimedOut(), equalTo(false));
 
@@ -78,7 +78,7 @@ public class SimpleDataNodesIT extends ESIntegTestCase {
     }
 
     public void testShardsAllocatedAfterDataNodesStart() {
-        internalCluster().startNode(Settings.builder().put(Node.NODE_DATA_SETTING.getKey(), false).build());
+        internalCluster().startNode(Settings.builder().put(NodeRoleSettings.NODE_EXCLUDE_ROLES_SETTING.getKey(), "data").build());
         client().admin().indices().create(createIndexRequest("test")
             .settings(Settings.builder().put(IndexMetadata.SETTING_NUMBER_OF_REPLICAS, 0)).waitForActiveShards(ActiveShardCount.NONE))
             .actionGet();
@@ -88,7 +88,7 @@ public class SimpleDataNodesIT extends ESIntegTestCase {
         assertThat(healthResponse1.getStatus(), equalTo(ClusterHealthStatus.RED));
         assertThat(healthResponse1.getActiveShards(), equalTo(0));
 
-        internalCluster().startNode(Settings.builder().put(Node.NODE_DATA_SETTING.getKey(), true).build());
+        internalCluster().startNode(Settings.builder().put(NodeRoleSettings.NODE_INCLUDE_ROLES_SETTING.getKey(), "data").build());
 
         assertThat(client().admin().cluster().prepareHealth()
             .setWaitForEvents(Priority.LANGUID).setWaitForNodes("2").setWaitForGreenStatus().execute().actionGet().isTimedOut(),
@@ -96,7 +96,7 @@ public class SimpleDataNodesIT extends ESIntegTestCase {
     }
 
     public void testAutoExpandReplicasAdjustedWhenDataNodeJoins() {
-        internalCluster().startNode(Settings.builder().put(Node.NODE_DATA_SETTING.getKey(), false).build());
+        internalCluster().startNode(Settings.builder().put(NodeRoleSettings.NODE_EXCLUDE_ROLES_SETTING.getKey(), "data").build());
         client().admin().indices().create(createIndexRequest("test")
             .settings(Settings.builder().put(IndexMetadata.SETTING_AUTO_EXPAND_REPLICAS, "0-all"))
             .waitForActiveShards(ActiveShardCount.NONE))
@@ -111,4 +111,5 @@ public class SimpleDataNodesIT extends ESIntegTestCase {
         internalCluster().startNode();
         client().admin().cluster().prepareReroute().setRetryFailed(true).get();
     }
+
 }

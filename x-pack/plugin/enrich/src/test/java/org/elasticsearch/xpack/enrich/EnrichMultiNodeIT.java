@@ -22,7 +22,7 @@ import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.xcontent.XContentType;
 import org.elasticsearch.index.reindex.ReindexPlugin;
 import org.elasticsearch.ingest.common.IngestCommonPlugin;
-import org.elasticsearch.node.Node;
+import org.elasticsearch.node.NodeRoleSettings;
 import org.elasticsearch.plugins.Plugin;
 import org.elasticsearch.test.ESIntegTestCase;
 import org.elasticsearch.xpack.core.enrich.EnrichPolicy;
@@ -113,9 +113,8 @@ public class EnrichMultiNodeIT extends ESIntegTestCase {
     public void testEnrichDedicatedIngestNode() {
         internalCluster().startNode();
         Settings settings = Settings.builder()
-            .put(Node.NODE_MASTER_SETTING.getKey(), false)
-            .put(Node.NODE_DATA_SETTING.getKey(), false)
-            .put(Node.NODE_INGEST_SETTING.getKey(), true)
+            .put(NodeRoleSettings.NODE_EXCLUDE_ROLES_SETTING.getKey(), "data,master")
+            .put(NodeRoleSettings.NODE_INCLUDE_ROLES_SETTING.getKey(), "ingest")
             .build();
         String ingestOnlyNode = internalCluster().startNode(settings);
 
@@ -127,9 +126,8 @@ public class EnrichMultiNodeIT extends ESIntegTestCase {
 
     public void testEnrichNoIngestNodes() {
         Settings settings = Settings.builder()
-            .put(Node.NODE_MASTER_SETTING.getKey(), true)
-            .put(Node.NODE_DATA_SETTING.getKey(), true)
-            .put(Node.NODE_INGEST_SETTING.getKey(), false)
+            .put(NodeRoleSettings.NODE_EXCLUDE_ROLES_SETTING.getKey(), "ingest")
+            .put(NodeRoleSettings.NODE_INCLUDE_ROLES_SETTING.getKey(), "data,master")
             .build();
         internalCluster().startNode(settings);
 

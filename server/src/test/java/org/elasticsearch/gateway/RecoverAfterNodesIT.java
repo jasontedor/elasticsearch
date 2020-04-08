@@ -22,9 +22,10 @@ package org.elasticsearch.gateway;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.cluster.block.ClusterBlock;
 import org.elasticsearch.cluster.block.ClusterBlockLevel;
+import org.elasticsearch.cluster.node.DiscoveryNodeRole;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.unit.TimeValue;
-import org.elasticsearch.node.Node;
+import org.elasticsearch.node.NodeRoleSettings;
 import org.elasticsearch.test.ESIntegTestCase;
 import org.elasticsearch.test.ESIntegTestCase.ClusterScope;
 import org.elasticsearch.test.ESIntegTestCase.Scope;
@@ -85,8 +86,9 @@ public class RecoverAfterNodesIT extends ESIntegTestCase {
         internalCluster().setBootstrapMasterNodeIndex(0);
         logger.info("--> start master_node (1)");
         Client master1 = startNode(Settings.builder()
-            .put("gateway.recover_after_master_nodes", 2).put(Node.NODE_DATA_SETTING.getKey(), false)
-            .put(Node.NODE_MASTER_SETTING.getKey(), true));
+            .put("gateway.recover_after_master_nodes", 2)
+            .put(NodeRoleSettings.NODE_EXCLUDE_ROLES_SETTING.getKey(), DiscoveryNodeRole.DATA_ROLE.roleName())
+            .put(NodeRoleSettings.NODE_INCLUDE_ROLES_SETTING.getKey(), DiscoveryNodeRole.MASTER_ROLE.roleName()));
         assertThat(master1.admin().cluster().prepareState().setLocal(true).execute().actionGet()
                 .getState().blocks().global(ClusterBlockLevel.METADATA_WRITE),
                 hasItem(GatewayService.STATE_NOT_RECOVERED_BLOCK));
@@ -94,7 +96,8 @@ public class RecoverAfterNodesIT extends ESIntegTestCase {
         logger.info("--> start data_node (1)");
         Client data1 = startNode(Settings.builder()
             .put("gateway.recover_after_master_nodes", 2)
-            .put(Node.NODE_DATA_SETTING.getKey(), true).put(Node.NODE_MASTER_SETTING.getKey(), false));
+            .put(NodeRoleSettings.NODE_INCLUDE_ROLES_SETTING.getKey(), DiscoveryNodeRole.DATA_ROLE.roleName())
+            .put(NodeRoleSettings.NODE_EXCLUDE_ROLES_SETTING.getKey(), DiscoveryNodeRole.MASTER_ROLE.roleName()));
         assertThat(master1.admin().cluster().prepareState().setLocal(true).execute().actionGet()
                 .getState().blocks().global(ClusterBlockLevel.METADATA_WRITE),
                 hasItem(GatewayService.STATE_NOT_RECOVERED_BLOCK));
@@ -104,8 +107,9 @@ public class RecoverAfterNodesIT extends ESIntegTestCase {
 
         logger.info("--> start data_node (2)");
         Client data2 = startNode(Settings.builder()
-            .put("gateway.recover_after_master_nodes", 2).put(Node.NODE_DATA_SETTING.getKey(), true)
-            .put(Node.NODE_MASTER_SETTING.getKey(), false));
+            .put("gateway.recover_after_master_nodes", 2)
+            .put(NodeRoleSettings.NODE_INCLUDE_ROLES_SETTING.getKey(), DiscoveryNodeRole.DATA_ROLE.roleName())
+            .put(NodeRoleSettings.NODE_EXCLUDE_ROLES_SETTING.getKey(), DiscoveryNodeRole.MASTER_ROLE.roleName()));
         assertThat(master1.admin().cluster().prepareState().setLocal(true).execute().actionGet()
                 .getState().blocks().global(ClusterBlockLevel.METADATA_WRITE),
                 hasItem(GatewayService.STATE_NOT_RECOVERED_BLOCK));
@@ -119,8 +123,8 @@ public class RecoverAfterNodesIT extends ESIntegTestCase {
         logger.info("--> start master_node (2)");
         Client master2 = startNode(Settings.builder()
             .put("gateway.recover_after_master_nodes", 2)
-            .put(Node.NODE_DATA_SETTING.getKey(), false)
-            .put(Node.NODE_MASTER_SETTING.getKey(), true));
+            .put(NodeRoleSettings.NODE_EXCLUDE_ROLES_SETTING.getKey(), DiscoveryNodeRole.DATA_ROLE.roleName())
+            .put(NodeRoleSettings.NODE_INCLUDE_ROLES_SETTING.getKey(), DiscoveryNodeRole.MASTER_ROLE.roleName()));
         assertThat(waitForNoBlocksOnNode(BLOCK_WAIT_TIMEOUT, master1).isEmpty(), equalTo(true));
         assertThat(waitForNoBlocksOnNode(BLOCK_WAIT_TIMEOUT, master2).isEmpty(), equalTo(true));
         assertThat(waitForNoBlocksOnNode(BLOCK_WAIT_TIMEOUT, data1).isEmpty(), equalTo(true));
@@ -132,8 +136,8 @@ public class RecoverAfterNodesIT extends ESIntegTestCase {
         logger.info("--> start master_node (1)");
         Client master1 = startNode(Settings.builder()
             .put("gateway.recover_after_data_nodes", 2)
-            .put(Node.NODE_DATA_SETTING.getKey(), false)
-            .put(Node.NODE_MASTER_SETTING.getKey(), true));
+            .put(NodeRoleSettings.NODE_EXCLUDE_ROLES_SETTING.getKey(), DiscoveryNodeRole.DATA_ROLE.roleName())
+            .put(NodeRoleSettings.NODE_INCLUDE_ROLES_SETTING.getKey(), DiscoveryNodeRole.MASTER_ROLE.roleName()));
         assertThat(master1.admin().cluster().prepareState().setLocal(true).execute().actionGet()
                 .getState().blocks().global(ClusterBlockLevel.METADATA_WRITE),
                 hasItem(GatewayService.STATE_NOT_RECOVERED_BLOCK));
@@ -141,8 +145,8 @@ public class RecoverAfterNodesIT extends ESIntegTestCase {
         logger.info("--> start data_node (1)");
         Client data1 = startNode(Settings.builder()
             .put("gateway.recover_after_data_nodes", 2)
-            .put(Node.NODE_DATA_SETTING.getKey(), true)
-            .put(Node.NODE_MASTER_SETTING.getKey(), false));
+            .put(NodeRoleSettings.NODE_INCLUDE_ROLES_SETTING.getKey(), DiscoveryNodeRole.DATA_ROLE.roleName())
+            .put(NodeRoleSettings.NODE_EXCLUDE_ROLES_SETTING.getKey(), DiscoveryNodeRole.MASTER_ROLE.roleName()));
         assertThat(master1.admin().cluster().prepareState().setLocal(true).execute().actionGet()
                 .getState().blocks().global(ClusterBlockLevel.METADATA_WRITE),
                 hasItem(GatewayService.STATE_NOT_RECOVERED_BLOCK));
@@ -153,8 +157,8 @@ public class RecoverAfterNodesIT extends ESIntegTestCase {
         logger.info("--> start master_node (2)");
         Client master2 = startNode(Settings.builder()
             .put("gateway.recover_after_data_nodes", 2)
-            .put(Node.NODE_DATA_SETTING.getKey(), false)
-            .put(Node.NODE_MASTER_SETTING.getKey(), true));
+            .put(NodeRoleSettings.NODE_EXCLUDE_ROLES_SETTING.getKey(), DiscoveryNodeRole.DATA_ROLE.roleName())
+            .put(NodeRoleSettings.NODE_INCLUDE_ROLES_SETTING.getKey(), DiscoveryNodeRole.MASTER_ROLE.roleName()));
         assertThat(master2.admin().cluster().prepareState().setLocal(true).execute().actionGet()
                 .getState().blocks().global(ClusterBlockLevel.METADATA_WRITE),
                 hasItem(GatewayService.STATE_NOT_RECOVERED_BLOCK));
@@ -168,8 +172,8 @@ public class RecoverAfterNodesIT extends ESIntegTestCase {
         logger.info("--> start data_node (2)");
         Client data2 = startNode(Settings.builder()
             .put("gateway.recover_after_data_nodes", 2)
-            .put(Node.NODE_DATA_SETTING.getKey(), true)
-            .put(Node.NODE_MASTER_SETTING.getKey(), false));
+            .put(NodeRoleSettings.NODE_INCLUDE_ROLES_SETTING.getKey(), DiscoveryNodeRole.DATA_ROLE.roleName())
+            .put(NodeRoleSettings.NODE_EXCLUDE_ROLES_SETTING.getKey(), DiscoveryNodeRole.MASTER_ROLE.roleName()));
         assertThat(waitForNoBlocksOnNode(BLOCK_WAIT_TIMEOUT, master1).isEmpty(), equalTo(true));
         assertThat(waitForNoBlocksOnNode(BLOCK_WAIT_TIMEOUT, master2).isEmpty(), equalTo(true));
         assertThat(waitForNoBlocksOnNode(BLOCK_WAIT_TIMEOUT, data1).isEmpty(), equalTo(true));

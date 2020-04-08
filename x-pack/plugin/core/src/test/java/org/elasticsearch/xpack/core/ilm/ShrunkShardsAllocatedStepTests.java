@@ -11,6 +11,7 @@ import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.metadata.IndexMetadata;
 import org.elasticsearch.cluster.metadata.Metadata;
 import org.elasticsearch.cluster.node.DiscoveryNode;
+import org.elasticsearch.cluster.node.DiscoveryNodeRole;
 import org.elasticsearch.cluster.node.DiscoveryNodes;
 import org.elasticsearch.cluster.routing.IndexRoutingTable;
 import org.elasticsearch.cluster.routing.RoutingTable;
@@ -19,7 +20,7 @@ import org.elasticsearch.cluster.routing.TestShardRouting;
 import org.elasticsearch.common.transport.TransportAddress;
 import org.elasticsearch.index.Index;
 import org.elasticsearch.index.shard.ShardId;
-import org.elasticsearch.node.Node;
+import org.elasticsearch.node.NodeRoleSettings;
 import org.elasticsearch.xpack.core.ilm.ClusterStateWaitStep.Result;
 import org.elasticsearch.xpack.core.ilm.Step.StepKey;
 
@@ -83,7 +84,7 @@ public class ShrunkShardsAllocatedStepTests extends AbstractStepTestCase<ShrunkS
 
         String nodeId = randomAlphaOfLength(10);
         DiscoveryNode masterNode = DiscoveryNode.createLocal(settings(Version.CURRENT)
-                .put(Node.NODE_MASTER_SETTING.getKey(), true).build(),
+                .put(NodeRoleSettings.NODE_INCLUDE_ROLES_SETTING.getKey(), DiscoveryNodeRole.MASTER_ROLE.roleName()).build(),
             new TransportAddress(TransportAddress.META_ADDRESS, 9300), nodeId);
 
         IndexRoutingTable.Builder builder = IndexRoutingTable.builder(shrinkIndex);
@@ -123,7 +124,7 @@ public class ShrunkShardsAllocatedStepTests extends AbstractStepTestCase<ShrunkS
 
         String nodeId = randomAlphaOfLength(10);
         DiscoveryNode masterNode = DiscoveryNode.createLocal(settings(Version.CURRENT)
-                .put(Node.NODE_MASTER_SETTING.getKey(), true).build(),
+                .put(NodeRoleSettings.NODE_INCLUDE_ROLES_SETTING.getKey(), DiscoveryNodeRole.MASTER_ROLE.roleName()).build(),
             new TransportAddress(TransportAddress.META_ADDRESS, 9300), nodeId);
 
         IndexRoutingTable.Builder builder = IndexRoutingTable.builder(shrinkIndex);
@@ -157,7 +158,7 @@ public class ShrunkShardsAllocatedStepTests extends AbstractStepTestCase<ShrunkS
 
         String nodeId = randomAlphaOfLength(10);
         DiscoveryNode masterNode = DiscoveryNode.createLocal(settings(Version.CURRENT)
-                .put(Node.NODE_MASTER_SETTING.getKey(), true).build(),
+                .put(NodeRoleSettings.NODE_INCLUDE_ROLES_SETTING.getKey(), DiscoveryNodeRole.MASTER_ROLE.roleName()).build(),
             new TransportAddress(TransportAddress.META_ADDRESS, 9300), nodeId);
         ClusterState clusterState = ClusterState.builder(ClusterName.DEFAULT)
             .metadata(metadata)

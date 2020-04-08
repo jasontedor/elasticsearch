@@ -5,10 +5,12 @@
  */
 package org.elasticsearch.cluster.coordination;
 
+import org.elasticsearch.cluster.node.DiscoveryNodeRole;
 import org.elasticsearch.common.Priority;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.discovery.MasterNotDiscoveredException;
 import org.elasticsearch.node.Node;
+import org.elasticsearch.node.NodeRoleSettings;
 import org.elasticsearch.plugins.Plugin;
 import org.elasticsearch.test.ESIntegTestCase;
 import org.elasticsearch.test.ESIntegTestCase.Scope;
@@ -32,8 +34,8 @@ public class VotingOnlyNodePluginTests extends ESIntegTestCase {
     public void testRequireVotingOnlyNodeToBeMasterEligible() {
         internalCluster().setBootstrapMasterNodeIndex(0);
         IllegalStateException ise = expectThrows(IllegalStateException.class, () -> internalCluster().startNode(Settings.builder()
-            .put(Node.NODE_MASTER_SETTING.getKey(), false)
-            .put(VotingOnlyNodePlugin.VOTING_ONLY_NODE_SETTING.getKey(), true)
+            .put(NodeRoleSettings.NODE_EXCLUDE_ROLES_SETTING.getKey(), DiscoveryNodeRole.MASTER_ROLE.roleName())
+            .put(NodeRoleSettings.NODE_INCLUDE_ROLES_SETTING.getKey(), VotingOnlyNodePlugin.VOTING_ONLY_NODE_ROLE.roleName())
             .build()));
         assertThat(ise.getMessage(), containsString("voting-only node must be master-eligible"));
     }
