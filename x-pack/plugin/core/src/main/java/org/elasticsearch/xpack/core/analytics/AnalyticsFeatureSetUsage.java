@@ -15,20 +15,29 @@ import org.elasticsearch.xpack.core.XPackField;
 import org.elasticsearch.xpack.core.analytics.action.AnalyticsStatsAction;
 
 import java.io.IOException;
+import java.util.Map;
 import java.util.Objects;
 
 public class AnalyticsFeatureSetUsage extends XPackFeatureSet.Usage {
 
     private final AnalyticsStatsAction.Response response;
+    private final Map<String, Object> stats;
 
     public AnalyticsFeatureSetUsage(boolean available, boolean enabled, AnalyticsStatsAction.Response response) {
         super(XPackField.ANALYTICS, available, enabled);
         this.response = response;
+        this.stats = response.getStats().toMap();
     }
 
     public AnalyticsFeatureSetUsage(StreamInput input) throws IOException {
         super(input);
-        this.response = new AnalyticsStatsAction.Response(input);
+        if (input.getVersion().before(Version.V_7_8_0)) {
+            this.response = new AnalyticsStatsAction.Response(input);
+            this.stats = this.response.getStats().toMap();
+        } else {
+            this.response = null;
+            this.stats = input.readMap();
+        }
     }
 
     public Version getMinimalSupportedVersion() {
@@ -51,7 +60,12 @@ public class AnalyticsFeatureSetUsage extends XPackFeatureSet.Usage {
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
-        response.writeTo(out);
+        if (out.getVersion().before(Version.V_7_8_0)) {
+            assert response != null;
+            response.writeTo(out);
+        } else {
+            out.writeMap(stats);
+        }
     }
 
     @Override
